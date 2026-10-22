@@ -1,8 +1,11 @@
 export type CriterionResult = { id: string; status: "PASS" | "FAIL"; message: string };
 
-const LINE = /^\s*(AC-[A-Za-z0-9_.-]+)\s*:\s*(PASS|FAIL)\b\s*(.*)$/;
+const LINE = /^\s*((?:AC|REG)-[A-Za-z0-9_.-]+)\s*:\s*(PASS|FAIL)\b\s*(.*)$/;
 
-/** Holdout commands print one `AC-<id>: PASS|FAIL <message>` line per criterion. */
+/**
+ * Holdout commands print one `AC-<id>: PASS|FAIL <message>` line per criterion of the current
+ * ticket, and `REG-<scope>-<id>: …` for regression checks from earlier tickets and the baseline.
+ */
 export function parseHoldoutResults(output: string): CriterionResult[] {
   const byId = new Map<string, CriterionResult>();
   for (const line of output.split("\n")) {

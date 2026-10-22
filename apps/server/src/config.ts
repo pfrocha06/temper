@@ -26,7 +26,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     instance,
     dataDir: join(home, "instances", instance, "db"),
     worktreesDir: join(home, "worktrees"),
-    port: Number(env.TEMPER_PORT ?? (instance === "rc" ? 4601 : 4600)),
+    port: Number(env.TEMPER_PORT ?? env.PORT ?? (instance === "rc" ? 4601 : 4600)),
     appRoot: env.TEMPER_APP_ROOT ?? appRoot,
     heartbeatMs: Number(env.TEMPER_HEARTBEAT_MS ?? 15_000),
     claudeBin: env.TEMPER_CLAUDE_BIN ?? "claude",

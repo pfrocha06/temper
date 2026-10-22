@@ -3,7 +3,9 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { createClaudeCliAdapter } from "@temper/adapter-claude-cli";
 import { loadConfig } from "./config.ts";
+import { probeHoldoutIsolation } from "./probe.ts";
 import { activate, backupDatabase, buildRelease, readState, restoreDatabase, waitHealthy } from "./releases.ts";
 import { installService, serviceInstalled, uninstallService } from "./service.ts";
 
@@ -63,6 +65,7 @@ const help = `temper <command>
   pause | resume                 stop/start dispatching new work
   project add --name N --repo PATH [--remote URL] [--holdouts PATH] [--test CMD] [--app CMD] [--health PATH] [--holdouts-cmd CMD]
   import-spec --project ID --file SPEC.md [--title T] [--start]
+  probe-isolation --holdouts PATH   check that a Builder run cannot read the holdouts
 `;
 
 switch (command) {
@@ -148,6 +151,22 @@ switch (command) {
     const title = values.title ?? /^#\s+(.+)$/m.exec(markdown)?.[1] ?? values.file;
     const tickets = (await call("/specs/import", { method: "POST", body: JSON.stringify({ projectId: values.project, title, markdown, autoStart: values.start }) })) as Array<{ id: string; title: string }>;
     for (const t of tickets) log(`${t.id}  ${t.title}`);
+    break;
+  }
+  case "probe-isolation": {
+    const { values } = parseArgs({ args: rest, options: { holdouts: { type: "string" } } });
+    if (!values.holdouts) throw new Error("usage: temper probe-isolation --holdouts PATH");
+    const r = await probeHoldoutIsolation(createClaudeCliAdapter({ bin: config.claudeBin }), resolve(values.holdouts));
+    const attempts = r.transcript.split("\n").filter((l) => l.includes('"kind":"tool_use"')).map((l) => {
+      const e = JSON.parse(l) as { tool: string; input: { command?: string; file_path?: string; pattern?: string } };
+      return `${e.tool} ${e.input.command ?? e.input.file_path ?? e.input.pattern ?? ""}`.slice(0, 120);
+    });
+    log(`attempts (${attempts.length}):\n${attempts.map((a) => `  - ${a}`).join("\n")}`);
+    log(r.leaked ? "✗ LEAK: the Builder read the holdouts canary" : "✓ isolated: the Builder could not read the holdouts canary");
+    if (r.leaked) {
+      log(r.transcript.slice(-4000));
+      process.exitCode = 1;
+    }
     break;
   }
   default:
