@@ -63,7 +63,7 @@ const help = `temper <command>
   start | stop                   install/uninstall the launchd service for the current release
   status                         service, release and factory status
   pause | resume                 stop/start dispatching new work
-  project add --name N --repo PATH [--remote URL] [--holdouts PATH] [--setup CMD] [--test CMD] [--app CMD] [--health PATH] [--holdouts-cmd CMD]
+  project add --name N --repo PATH [--remote URL] [--holdouts PATH] [--setup CMD] [--test CMD] [--app CMD] [--health PATH] [--holdouts-cmd CMD] [--holdouts-setup CMD]
   import-spec --project ID --file SPEC.md [--title T] [--start]
   probe-isolation --holdouts PATH   check that a Builder run cannot read the holdouts
 `;
@@ -118,6 +118,7 @@ switch (command) {
         app: { type: "string" },
         health: { type: "string" },
         "holdouts-cmd": { type: "string" },
+        "holdouts-setup": { type: "string" },
       },
     });
     if (rest[0] !== "add" || !values.name || !values.repo) throw new Error("usage: temper project add --name N --repo PATH ...");
@@ -135,6 +136,7 @@ switch (command) {
             appCommand: values.app,
             appHealthPath: values.health,
             holdoutsCommand: values["holdouts-cmd"],
+            holdoutsSetupCommand: values["holdouts-setup"],
           }),
         }),
         null,

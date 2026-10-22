@@ -9,7 +9,14 @@ import { scanAddedLines } from "./secret-scan.ts";
 
 export type CheckResult = { check: GateCheck; ok: boolean; report: string; builderFeedback?: string };
 
-export type GateContext = { project: Project; ticket: Ticket; worktree: string; signal?: AbortSignal };
+export type GateContext = {
+  project: Project;
+  ticket: Ticket;
+  worktree: string;
+  /** Merged tickets whose holdouts run as regression checks. */
+  regressionTickets?: string[];
+  signal?: AbortSignal;
+};
 
 const fence = (s: string) => "```\n" + s.trim().slice(-4000) + "\n```";
 
@@ -68,7 +75,7 @@ export async function holdouts(ctx: GateContext): Promise<CheckResult> {
     if (project.appCommand) app = await bootApp(project.appCommand, ctx.worktree, project.appHealthPath);
     const r = await runShell(project.holdoutsCommand, {
       cwd: project.holdoutsPath,
-      env: { ...process.env, TEMPER_APP_URL: app?.url ?? "", TEMPER_CANDIDATE_PATH: ctx.worktree, TEMPER_TICKET_ID: ctx.ticket.id },
+      env: { ...process.env, TEMPER_APP_URL: app?.url ?? "", TEMPER_CANDIDATE_PATH: ctx.worktree, TEMPER_TICKET_ID: ctx.ticket.id, TEMPER_REGRESSION_TICKETS: (ctx.regressionTickets ?? []).join(",") },
       signal: ctx.signal,
       timeoutMs: 20 * 60_000,
     });
