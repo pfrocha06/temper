@@ -48,6 +48,7 @@ import { setCookie } from "hono/cookie";
 import { createAgentApi } from "./agent-api.ts";
 import { BOARD_COOKIE, type Auth } from "./auth.ts";
 import { createHealth } from "./health.ts";
+import { importFromJira, JiraImportError } from "./jira-import.ts";
 import { loadProfile, type Profile } from "./profile.ts";
 import { listProviders } from "./providers.ts";
 import { inventory } from "./tools.ts";
@@ -157,6 +158,19 @@ export function createApi(db: Db, factory: Factory, config: Config, opts: { upti
       .object({ projectId: z.string(), title: z.string().min(1), markdown: z.string().min(1), autoStart: z.boolean().default(false) })
       .parse(await c.req.json());
     return c.json(await factory.importSpec(body.projectId, body.title, body.markdown, body.autoStart), 201);
+  });
+
+  app.post("/api/jira/import", async (c) => {
+    const body = z
+      .object({ projectId: z.string(), issue: z.string().min(1).optional(), jql: z.string().min(1).optional(), start: z.boolean().default(false) })
+      .parse(await c.req.json());
+    try {
+      const deps = { db, profile: opts.profile ?? loadProfile(config.home), secretsDir: config.secretsDir, importSpec: (pid: string, title: string, md: string, start: boolean) => factory.importSpec(pid, title, md, start), tick: () => factory.tick() };
+      return c.json({ results: await importFromJira(deps, body) }, 201);
+    } catch (e) {
+      if (e instanceof JiraImportError) return c.json({ error: e.message }, 400);
+      throw e;
+    }
   });
 
   app.get("/api/dispatches", async (c) => c.json(await recentDispatches(db, Number(c.req.query("limit") ?? 50))));

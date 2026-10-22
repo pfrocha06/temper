@@ -82,6 +82,7 @@ const help = `temper <command>
   pause | resume                 stop/start dispatching new work
   project add --name N --repo PATH [--remote URL] [--holdouts PATH] [--setup CMD] [--test CMD] [--app CMD] [--health PATH] [--holdouts-cmd CMD] [--holdouts-setup CMD]
   import-spec --project ID --file SPEC.md [--title T] [--start]
+  import-jira --project ID (--issue KEY | --jql "…") [--start]
   probe-isolation --holdouts PATH   check a Builder run cannot read holdouts or secrets, or use the board API
 `;
 
@@ -178,6 +179,22 @@ switch (command) {
     const title = values.title ?? /^#\s+(.+)$/m.exec(markdown)?.[1] ?? values.file;
     const tickets = (await call("/specs/import", { method: "POST", body: JSON.stringify({ projectId: values.project, title, markdown, autoStart: values.start }) })) as Array<{ id: string; title: string }>;
     for (const t of tickets) log(`${t.id}  ${t.title}`);
+    break;
+  }
+  case "import-jira": {
+    const { values } = parseArgs({
+      args: rest,
+      options: { project: { type: "string" }, issue: { type: "string" }, jql: { type: "string" }, start: { type: "boolean", default: false } },
+    });
+    if (!values.project || !!values.issue === !!values.jql) throw new Error('usage: temper import-jira --project ID (--issue KEY | --jql "…") [--start]');
+    const { results } = (await call("/jira/import", { method: "POST", body: JSON.stringify({ projectId: values.project, issue: values.issue, jql: values.jql, start: values.start }) })) as {
+      results: Array<{ key: string; status: string; ticketIds: string[]; existingTicketId?: string }>;
+    };
+    if (!results.length) log("no matching issues");
+    for (const r of results) {
+      if (r.status === "skipped") log(`${r.key}  skipped: already linked to open ticket ${r.existingTicketId}`);
+      else for (const id of r.ticketIds) log(`${r.key}  ${id}`);
+    }
     break;
   }
   case "probe-isolation": {
