@@ -98,3 +98,22 @@ describe("feature ticket end to end", () => {
     expect((await recentAudit(db, 500)).filter((e) => e.kind === "worktree.setup")).toHaveLength(1);
   }, 60_000);
 });
+
+describe("proposals", () => {
+  it("execute only after the board confirms", async () => {
+    const { requestApproval, resolveApproval, getApproval } = await import("@temper/core");
+    const target = await requestApproval(db, { kind: "decision", title: "Decide", options: ["accept", "retry", "cancel"] });
+    const proposal = await requestApproval(db, {
+      kind: "proposal",
+      title: "Chief proposes: accept",
+      options: ["confirm", "decline"],
+      payload: { action: "resolve_approval", approvalId: target.id, resolution: "accept" },
+    });
+    await factory.onApprovalResolved(await resolveApproval(db, proposal.id, "decline"));
+    expect((await getApproval(db, target.id))!.status).toBe("pending");
+
+    const again = await requestApproval(db, { kind: "proposal", title: "Chief proposes: accept", options: ["confirm", "decline"], payload: proposal.payload! });
+    await factory.onApprovalResolved(await resolveApproval(db, again.id, "confirm"));
+    expect((await getApproval(db, target.id))!).toMatchObject({ status: "resolved", resolution: "accept" });
+  });
+});

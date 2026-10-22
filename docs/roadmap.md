@@ -52,8 +52,8 @@ environments · Chief of Staff conversations · Tools inventory
 | 9 | Factory metrics | [0010](specs/0010-metrics.md) | todo |
 | 10 | Second agent vendor (Codex) behind the adapter | [0011](specs/0011-second-vendor.md) | todo |
 | 11 | Off-machine backups | [0012](specs/0012-offsite-backup.md) | todo |
-| 12 | Providers settings: usage, subscription limits, caps, logos | [0013](specs/0013-providers-and-usage.md) | in progress |
-| 13 | Chief of Staff operator tools (board decisions only as confirmable proposals) | [0014](specs/0014-chief-operator-tools.md) | todo |
+| 12 | Providers settings: usage, subscription limits, caps, logos, Usage dashboard | [0013](specs/0013-providers-and-usage.md) | done (follow-ups: per-ticket wasted tokens in the report; UTC vs local day buckets) |
+| 13 | Chief of Staff operator tools (board decisions only as confirmable proposals) | [0014](specs/0014-chief-operator-tools.md) | done (follow-ups: resolved proposals in chat history; richer stored chat-action detail) |
 | 14 | Connector catalog from the MCP Registry with generic OAuth and a credential proxy | [0015](specs/0015-connector-catalog.md) | todo |
 | 15 | Environment and project management UI | [0016](specs/0016-environments-ui.md) | todo |
 | 16 | Automations and scheduled tasks | — (later) | idea |

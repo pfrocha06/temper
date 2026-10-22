@@ -12,6 +12,8 @@ export type Capability = {
   environmentId: string;
   projectId?: string;
   dispatchId?: string;
+  /** Set for Chief conversations: proposals link back to the chat. */
+  chatId?: string;
   expiresAt: number;
 };
 

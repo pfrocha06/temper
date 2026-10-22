@@ -10,8 +10,17 @@ const fixture = join(import.meta.dirname, "fixtures/echo-pass.jsonl");
 describe("parseLine", () => {
   it("maps a real stream to events", () => {
     const events = readFileSync(fixture, "utf8").split("\n").flatMap(parseLine);
-    expect(events.map((e) => e.kind)).toEqual(["init", "tool_use", "tool_result", "text", "result"]);
+    expect(events.map((e) => e.kind)).toEqual(["init", "tool_use", "rate_limit", "tool_result", "text", "result"]);
     expect(events.at(-1)).toMatchObject({ kind: "result", text: "VERDICT: PASS", isError: false });
+  });
+
+  it("reports usage per model and every rate-limit window", () => {
+    const usage = parseLine(JSON.stringify({ type: "result", is_error: false, result: "ok", duration_api_ms: 900, modelUsage: { "m-1": { inputTokens: 4, outputTokens: 85, cacheReadInputTokens: 10, cacheCreationInputTokens: 20, costUSD: 0.15 } } }));
+    expect(usage.at(-1)).toEqual({ kind: "usage", apiMs: 900, models: { "m-1": { inputTokens: 4, outputTokens: 85, cacheReadTokens: 10, cacheWriteTokens: 20, costUsd: 0.15 } } });
+    const allowed = parseLine(JSON.stringify({ type: "rate_limit_event", rate_limit_info: { status: "allowed", rateLimitType: "five_hour", resetsAt: 1800000000 } }));
+    expect(allowed).toEqual([{ kind: "rate_limit", limitType: "five_hour", status: "allowed", resetsAt: 1800000000, raw: { status: "allowed", rateLimitType: "five_hour", resetsAt: 1800000000 } }]);
+    const rejected = parseLine(JSON.stringify({ type: "rate_limit_event", rate_limit_info: { status: "rejected", rateLimitType: "seven_day" } }));
+    expect(rejected.map((e) => e.kind)).toEqual(["rate_limit", "rate_limited"]);
   });
 
   it("flags rate limits", () => {

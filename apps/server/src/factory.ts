@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -32,6 +33,9 @@ import {
   ticketDispatches,
   updateTicket,
   addChatMessage,
+  getApproval,
+  resolveApproval,
+  type Actor,
   getChat,
   getEnvironment,
   knowledgeDigest,
@@ -41,6 +45,11 @@ import {
   type Agent,
   type AgentAdapter,
   type McpServerSpec,
+  capReached,
+  getCaps,
+  recordLimit,
+  recordUsage,
+  usageWindows,
   type Approval,
   type Db,
   type Project,
@@ -138,7 +147,7 @@ export class Factory extends EventEmitter {
    * MCP servers for one run: the built-in `temper` server (with a capability scoped to this run)
    * plus any profile servers assigned to the agent. Returns a release function.
    */
-  private mcpFor(agent: Agent, scope: { environmentId: string; projectId?: string; dispatchId?: string }): { servers: Record<string, McpServerSpec>; release: () => void } {
+  private mcpFor(agent: Agent, scope: { environmentId: string; projectId?: string; dispatchId?: string; chatId?: string }): { servers: Record<string, McpServerSpec>; release: () => void } {
     const servers: Record<string, McpServerSpec> = {};
     let token: string | undefined;
     const { auth, profile } = this.options;
@@ -155,6 +164,46 @@ export class Factory extends EventEmitter {
       if (cfg && name !== "temper") servers[name] = { command: cfg.command, args: cfg.args, env: cfg.env };
     }
     return { servers, release: () => token && auth?.revoke(token) };
+  }
+
+  /**
+   * Wraps a run's event handler to record provider usage and limit reports, and to pause the
+   * provider until the reset time it reports when a limit is hit.
+   */
+  private observe(adapter: string, ctx: { dispatchId?: string; chatId?: string }, next?: (e: RunEvent) => void): (e: RunEvent) => void {
+    return (e) => {
+      if (e.kind === "usage") void recordUsage(this.db, adapter, e.models, { ...ctx, apiMs: e.apiMs });
+      if (e.kind === "rate_limit") {
+        void recordLimit(this.db, adapter, e);
+        if (e.status !== "allowed") {
+          const until = e.resetsAt ? e.resetsAt * 1000 : Date.now() + RATE_LIMIT_PAUSE_MS;
+          this.pausedAdapters.set(adapter, Math.max(until, this.pausedAdapters.get(adapter) ?? 0));
+        }
+      }
+      next?.(e);
+    };
+  }
+
+  private capNotices = new Set<string>();
+
+  /** A provider at one of its board-set caps takes no new work; the board hears about it once per window. */
+  private async providerCapped(adapter: string): Promise<boolean> {
+    const caps = await getCaps(this.db, adapter);
+    if (Object.keys(caps).length === 0) return false;
+    const windows = await usageWindows(this.db, adapter, caps);
+    const hit = capReached(caps, windows);
+    if (!hit) return false;
+    const key = `${adapter}:${hit.cap}:${new Date().toDateString()}`;
+    if (!this.capNotices.has(key)) {
+      this.capNotices.add(key);
+      await requestApproval(this.db, {
+        kind: "notice",
+        title: `${adapter} reached its ${hit.cap} cap (${hit.used}/${hit.limit})`,
+        body: "New work for this provider waits until the window resets. Raise the cap in Settings → Providers to continue now.",
+        options: ["dismiss"],
+      });
+    }
+    return true;
   }
 
   /** The L0/L1 knowledge digest for a run, recorded as read by that dispatch. */
@@ -179,9 +228,9 @@ export class Factory extends EventEmitter {
     for (const a of this.active.values()) a.controller.abort();
   }
 
-  async setPaused(paused: boolean): Promise<void> {
+  async setPaused(paused: boolean, actor: Actor = "board"): Promise<void> {
     this.paused = paused;
-    await audit(this.db, { actor: "board", kind: paused ? "factory.paused" : "factory.resumed" });
+    await audit(this.db, { actor, kind: paused ? "factory.paused" : "factory.resumed" });
     if (!paused) void this.tick();
   }
 
@@ -256,6 +305,7 @@ export class Factory extends EventEmitter {
     if (stage.kind === "gate") return active.filter((a) => a.role === "server").length < MAX_GATE_CONCURRENCY;
     const agent = await this.agentFor(stage.role);
     if ((this.pausedAdapters.get(agent.adapter) ?? 0) > Date.now()) return false;
+    if (await this.providerCapped(agent.adapter)) return false;
     if (active.filter((a) => a.agentId === agent.id).length >= agent.maxConcurrency) return false;
     const hourAgo = Date.now() - 3_600_000;
     const recent = (await recentDispatches(this.db, 200)).filter((d) => d.agentId === agent.id && d.createdAt.getTime() > hourAgo);
@@ -464,11 +514,11 @@ export class Factory extends EventEmitter {
               : AGENT_ENV,
           signal,
         },
-        (e) => void recordDispatchEvent(this.db, dispatchId, e),
+        this.observe(agent.adapter, { dispatchId }, (e) => void recordDispatchEvent(this.db, dispatchId, e)),
       );
       if (result.rateLimited) {
-        this.pausedAdapters.set(agent.adapter, Date.now() + RATE_LIMIT_PAUSE_MS);
-        await audit(this.db, { actor: "system", kind: "adapter.rate_limited", subject: agent.adapter });
+        if ((this.pausedAdapters.get(agent.adapter) ?? 0) < Date.now()) this.pausedAdapters.set(agent.adapter, Date.now() + RATE_LIMIT_PAUSE_MS);
+        await audit(this.db, { actor: "system", kind: "adapter.rate_limited", subject: agent.adapter, data: { until: new Date(this.pausedAdapters.get(agent.adapter)!).toISOString() } });
       }
       let verdict: Verdict = result.isError ? "FAIL" : parseVerdict(result.finalText);
       let summary = result.finalText || (result.isError ? "agent run failed" : "");
@@ -694,7 +744,7 @@ export class Factory extends EventEmitter {
           mcpServers: mcp.servers,
           env: AGENT_ENV,
         },
-        (e) => void recordDispatchEvent(this.db, dispatch.id, e),
+        this.observe(agent.adapter, { dispatchId: dispatch.id }, (e) => void recordDispatchEvent(this.db, dispatch.id, e)),
       );
       await finishDispatch(this.db, dispatch.id, {
         status: result.isError ? "failed" : "succeeded",
@@ -726,7 +776,7 @@ export class Factory extends EventEmitter {
     await addChatMessage(this.db, chatId, "board", message);
     this.chatting.add(chatId);
     this.emit("chat", { chatId, kind: "started" });
-    const mcp = this.mcpFor(agent, { environmentId: env.id });
+    const mcp = this.mcpFor(agent, { environmentId: env.id, chatId });
     const actions: Array<{ tool: string; summary: string }> = [];
     void (async () => {
       try {
@@ -746,13 +796,13 @@ export class Factory extends EventEmitter {
             mcpServers: mcp.servers,
             env: AGENT_ENV,
           },
-          (e) => {
+          this.observe(agent.adapter, { chatId }, (e) => {
             if (e.kind === "tool_use" && e.tool.startsWith("mcp__temper__")) {
               const input = e.input as Record<string, unknown>;
               actions.push({ tool: e.tool.slice("mcp__temper__".length), summary: String(input.title ?? input.query ?? input.id ?? "").slice(0, 120) });
             }
             this.emit("chat", { chatId, kind: "event", event: e });
-          },
+          }),
         );
         await addChatMessage(this.db, chatId, "chief", result.finalText || "(no reply)", actions, result.sessionId);
       } catch (err) {
@@ -779,6 +829,10 @@ export class Factory extends EventEmitter {
   // ── board actions ───────────────────────────────────────────────────────
 
   async onApprovalResolved(approval: Approval): Promise<void> {
+    if (approval.kind === "proposal") {
+      if (approval.resolution === "confirm") await this.executeProposal(approval);
+      return;
+    }
     if (!approval.ticketId) return;
     const ticket = await getTicket(this.db, approval.ticketId);
     if (!ticket || ticket.status !== "awaiting_board") return;
@@ -802,10 +856,53 @@ export class Factory extends EventEmitter {
     void this.tick();
   }
 
-  async cancelTicket(id: string): Promise<void> {
+  /** Backlog → ready. */
+  async startTicket(id: string, actor: Actor = "board"): Promise<Ticket> {
+    const t = await getTicket(this.db, id);
+    if (!t || t.status !== "backlog") throw new Error("only backlog tickets can be started");
+    const updated = await updateTicket(this.db, id, { status: "ready" }, actor);
+    void this.tick();
+    return updated;
+  }
+
+  /** Re-run a stuck ticket's current stage. Operational, not a board decision: nothing is accepted. */
+  async retryTicket(id: string, actor: Actor): Promise<void> {
+    const pending = (await pendingApprovals(this.db)).find((a) => a.ticketId === id && (a.kind === "escalation" || a.kind === "decision"));
+    if (!pending) throw new Error("this ticket is not waiting on a retryable escalation");
+    const resolved = await resolveApproval(this.db, pending.id, "retry", `retried by ${actor}`, actor);
+    await this.onApprovalResolved(resolved);
+  }
+
+  /**
+   * Runs what a proposal describes once the board confirmed it. Proposals are how the Chief of
+   * Staff asks for board decisions; it can never resolve them itself.
+   */
+  private async executeProposal(proposal: Approval): Promise<void> {
+    const p = proposal.payload ?? {};
+    const note = `confirmed proposal ${proposal.id}${proposal.chatId ? ` from chat ${proposal.chatId}` : ""}`;
+    if (p.action === "resolve_approval") {
+      const target = await getApproval(this.db, String(p.approvalId));
+      if (!target || target.status !== "pending") throw new Error("the proposed approval is no longer pending");
+      const resolved = await resolveApproval(this.db, target.id, String(p.resolution), note, "board");
+      await this.onApprovalResolved(resolved);
+    } else if (p.action === "deploy") {
+      const cli = join(this.config.appRoot, "apps", "server", "src", "cli.ts");
+      const child = spawn(process.execPath, [cli, "deploy", "--ref", String(p.ref ?? "main"), "--source", String(p.source)], {
+        detached: true,
+        stdio: "ignore",
+        env: { ...process.env, TEMPER_HOME: this.config.home },
+      });
+      child.unref();
+      await audit(this.db, { actor: "board", kind: "deploy.requested", data: { ref: p.ref, source: p.source, note } });
+    } else {
+      throw new Error(`unknown proposal action ${String(p.action)}`);
+    }
+  }
+
+  async cancelTicket(id: string, actor: Actor = "board"): Promise<void> {
     const t = await getTicket(this.db, id);
     if (!t) throw new Error(`ticket ${id} not found`);
-    await updateTicket(this.db, id, { status: "cancelled" }, "board");
+    await updateTicket(this.db, id, { status: "cancelled" }, actor);
     for (const a of this.active.values()) if (a.ticketId === id) a.controller.abort();
     await this.cleanup(t);
     this.emit("change");
@@ -852,7 +949,7 @@ export class Factory extends EventEmitter {
         mcpServers: mcp.servers,
         env: AGENT_ENV,
       },
-      () => {},
+      this.observe(agent.adapter, {}),
     ).finally(() => mcp.release());
     if (result.isError) throw new Error(`the Chief of Staff failed: ${result.finalText.slice(0, 500)}`);
     const planned = parsePlan(result.finalText);

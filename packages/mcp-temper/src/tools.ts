@@ -102,6 +102,42 @@ export const TOOLS: Tool[] = [
   },
 ];
 
+const chief = (name: string, description: string, input: z.ZodRawShape, run: Tool["run"]): Tool => ({ name, description, input, roles: ["chief"], run });
+const id = (a: Record<string, unknown>) => encodeURIComponent(String(a.ticketId));
+
+TOOLS.push(
+  chief("ticket_start", "Queue a backlog ticket for the Builder.", { ticketId: z.string() }, (call, a) => call("POST", `/api/agent/tickets/${id(a)}/start`)),
+  chief("ticket_cancel", "Cancel a ticket and clean up its worktree.", { ticketId: z.string() }, (call, a) => call("POST", `/api/agent/tickets/${id(a)}/cancel`)),
+  chief(
+    "ticket_retry",
+    "Re-run the current stage of a ticket that is stuck waiting on an escalation. This does not accept or approve anything.",
+    { ticketId: z.string() },
+    (call, a) => call("POST", `/api/agent/tickets/${id(a)}/retry`),
+  ),
+  chief("ticket_digest", "Re-run the knowledge digest for a finished ticket.", { ticketId: z.string() }, (call, a) => call("POST", `/api/agent/tickets/${id(a)}/digest`)),
+  chief("factory_pause", "Stop dispatching new work (running work finishes).", {}, (call) => call("POST", "/api/agent/factory/pause")),
+  chief("factory_resume", "Resume dispatching work.", {}, (call) => call("POST", "/api/agent/factory/resume")),
+  chief(
+    "project_register",
+    "Register a repository in this environment as a project.",
+    { name: z.string(), repoPath: z.string(), remoteUrl: z.string().optional(), defaultBranch: z.string().optional(), setupCommand: z.string().optional(), testCommand: z.string().optional() },
+    (call, a) => call("POST", "/api/agent/projects", a),
+  ),
+  chief("approvals_list", "List decisions waiting for the board in this environment.", {}, (call) => call("GET", "/api/agent/approvals")),
+  chief(
+    "propose_decision",
+    "Ask the board to resolve a pending decision (merge, accept a stuck ticket, a Verifier change…). You cannot resolve it yourself; the board sees a Confirm button. Give your reasoning.",
+    { approvalId: z.string(), resolution: z.string(), reason: z.string().min(3) },
+    (call, a) => call("POST", "/api/agent/proposals", { action: "resolve_approval", ...a }),
+  ),
+  chief(
+    "propose_deploy",
+    "Ask the board to deploy a new Temper release from a project's repository (ref defaults to main).",
+    { source: z.string().describe("repoPath of the project to build from"), ref: z.string().optional(), reason: z.string().min(3) },
+    (call, a) => call("POST", "/api/agent/proposals", { action: "deploy", ...a }),
+  ),
+);
+
 export function toolsForRole(role: string): Tool[] {
   return TOOLS.filter((t) => t.roles.length === 0 || t.roles.includes(role));
 }

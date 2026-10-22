@@ -32,7 +32,13 @@ export type RunEvent =
   | { kind: "tool_result"; isError: boolean; content: string }
   | { kind: "stderr"; text: string }
   | { kind: "result"; text: string; isError: boolean; turns?: number; durationMs?: number }
-  | { kind: "rate_limited"; text: string };
+  | { kind: "rate_limited"; text: string }
+  /** The provider's usage report for the run: tokens per model, and its list-price equivalent. */
+  | { kind: "usage"; models: Record<string, ModelUsage>; apiMs?: number }
+  /** A subscription/rate-limit window report, exactly as the provider states it. */
+  | { kind: "rate_limit"; limitType: string; status: string; resetsAt?: number; raw: Record<string, unknown> };
+
+export type ModelUsage = { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; costUsd?: number };
 
 export type RunResult = {
   finalText: string;
