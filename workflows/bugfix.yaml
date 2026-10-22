@@ -1,0 +1,46 @@
+type: bugfix
+description: Reproduce, root-cause and fix a defect; always ends in a regression test.
+start: reproduce
+stages:
+  - id: reproduce
+    kind: agent
+    role: builder
+    artifact: reproduction.md
+    instructions: |
+      Reproduce the defect with runtime evidence before changing any product code.
+      Write a failing regression test that captures it. Explain the root cause, not the symptom.
+      If you cannot reproduce it, end BLOCKED with what you tried.
+    on: { PASS: fix, FAIL: reproduce, BLOCKED: board }
+  - id: fix
+    kind: agent
+    role: builder
+    artifact: changes.md
+    instructions: |
+      Fix the root cause so the regression test passes. Keep the fix minimal and inside the
+      file scope. Commit locally. Never push.
+    on: { PASS: verify, FAIL: fix, BLOCKED: board }
+  - id: verify
+    kind: agent
+    role: verifier
+    artifact: verification.md
+    instructions: |
+      Add a holdout that would have caught this defect, from the bug report alone, and run the
+      holdouts against the running app. Report evidence per acceptance criterion.
+    on: { PASS: gates, FAIL: fix, BLOCKED: board }
+  - id: gates
+    kind: gate
+    checks: [builder_tests, diff_guard, secret_scan, holdouts]
+    on: { PASS: review, FAIL: fix }
+  - id: review
+    kind: agent
+    role: reviewer
+    artifact: review.md
+    readOnly: true
+    instructions: |
+      Confirm the root cause is addressed (not masked) and the regression test fails without
+      the fix. Findings as BLOCKER / SHOULD / NIT. PASS only with no BLOCKER.
+    on: { PASS: pr, FAIL: fix }
+  - id: pr
+    kind: gate
+    checks: [open_pr, await_merge]
+    on: { PASS: done, FAIL: board }

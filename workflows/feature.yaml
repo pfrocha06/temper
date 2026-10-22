@@ -1,0 +1,43 @@
+type: feature
+description: New or changed behaviour, built test-first and proven against the running app.
+start: build
+stages:
+  - id: build
+    kind: agent
+    role: builder
+    artifact: changes.md
+    maxLoops: 4
+    instructions: |
+      Implement the ticket test-first, one vertical slice at a time (red → green → refactor).
+      Write a failing test for each acceptance criterion before the code that satisfies it.
+      Stay inside the ticket's file scope. Do not edit existing tests unless the ticket says so.
+      Commit locally in small steps. Never push.
+      In changes.md: what changed, why, and the before/after behaviour a user would notice.
+    on: { PASS: verify, FAIL: build, BLOCKED: board }
+  - id: verify
+    kind: agent
+    role: verifier
+    artifact: verification.md
+    instructions: |
+      From the spec and acceptance criteria alone, write or update holdout behaviour tests for
+      this ticket in the holdouts repository, then run them against the running app.
+      Never read the Builder's tests to decide what to check. Report per criterion: pass/fail
+      with evidence (command, output excerpt, screenshot path).
+    on: { PASS: gates, FAIL: build, BLOCKED: board }
+  - id: gates
+    kind: gate
+    checks: [builder_tests, diff_guard, secret_scan, holdouts]
+    on: { PASS: review, FAIL: build }
+  - id: review
+    kind: agent
+    role: reviewer
+    artifact: review.md
+    readOnly: true
+    instructions: |
+      Try to break this diff. Check it against the spec and acceptance criteria, the glossary
+      and ADRs. List findings as BLOCKER / SHOULD / NIT with file:line. PASS only with no BLOCKER.
+    on: { PASS: pr, FAIL: build }
+  - id: pr
+    kind: gate
+    checks: [open_pr, await_merge]
+    on: { PASS: done, FAIL: board }

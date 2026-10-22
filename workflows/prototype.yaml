@@ -1,0 +1,21 @@
+type: prototype
+description: Throwaway sketch to make a design decision. Never merged.
+start: sketch
+stages:
+  - id: sketch
+    kind: agent
+    role: builder
+    artifact: decision.md
+    instructions: |
+      Build the smallest throwaway that answers the design question. Speed over quality; this
+      branch is never merged. In decision.md: the question, what you tried, what you observed,
+      and a recommended decision.
+    on: { PASS: review, FAIL: sketch, BLOCKED: board }
+  - id: review
+    kind: agent
+    role: reviewer
+    artifact: review.md
+    readOnly: true
+    instructions: |
+      Does the evidence actually support the recommended decision? PASS if it does.
+    on: { PASS: board, FAIL: sketch }

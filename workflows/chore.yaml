@@ -1,0 +1,28 @@
+type: chore
+description: Dependency bumps, config and housekeeping with a small blast radius.
+start: build
+stages:
+  - id: build
+    kind: agent
+    role: builder
+    artifact: changes.md
+    instructions: |
+      Make the change. Keep it small and mechanical. Run the full test suite. Commit locally.
+    on: { PASS: gates, FAIL: build, BLOCKED: board }
+  - id: gates
+    kind: gate
+    checks: [builder_tests, diff_guard, secret_scan]
+    on: { PASS: review, FAIL: build }
+  - id: review
+    kind: agent
+    role: reviewer
+    artifact: review.md
+    readOnly: true
+    instructions: |
+      Confirm the change is as small as claimed and nothing unrelated slipped in.
+      PASS only with no BLOCKER.
+    on: { PASS: pr, FAIL: build }
+  - id: pr
+    kind: gate
+    checks: [open_pr, await_merge]
+    on: { PASS: done, FAIL: board }
