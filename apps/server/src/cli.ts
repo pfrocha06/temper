@@ -63,7 +63,7 @@ const help = `temper <command>
   start | stop                   install/uninstall the launchd service for the current release
   status                         service, release and factory status
   pause | resume                 stop/start dispatching new work
-  project add --name N --repo PATH [--remote URL] [--holdouts PATH] [--test CMD] [--app CMD] [--health PATH] [--holdouts-cmd CMD]
+  project add --name N --repo PATH [--remote URL] [--holdouts PATH] [--setup CMD] [--test CMD] [--app CMD] [--health PATH] [--holdouts-cmd CMD]
   import-spec --project ID --file SPEC.md [--title T] [--start]
   probe-isolation --holdouts PATH   check that a Builder run cannot read the holdouts
 `;
@@ -113,6 +113,7 @@ switch (command) {
         repo: { type: "string" },
         remote: { type: "string" },
         holdouts: { type: "string" },
+        setup: { type: "string" },
         test: { type: "string" },
         app: { type: "string" },
         health: { type: "string" },
@@ -129,6 +130,7 @@ switch (command) {
             repoPath: resolve(values.repo),
             remoteUrl: values.remote,
             holdoutsPath: values.holdouts && resolve(values.holdouts),
+            setupCommand: values.setup,
             testCommand: values.test,
             appCommand: values.app,
             appHealthPath: values.health,

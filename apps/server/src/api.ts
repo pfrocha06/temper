@@ -38,6 +38,7 @@ const NewProject = z.object({
   remoteUrl: z.string().optional(),
   holdoutsPath: z.string().optional(),
   defaultBranch: z.string().optional(),
+  setupCommand: z.string().optional(),
   testCommand: z.string().optional(),
   appCommand: z.string().optional(),
   appHealthPath: z.string().optional(),

@@ -16,6 +16,8 @@ export type RunRequest = {
   /** Skill directories (each containing SKILL.md) to expose to this run only. */
   skillDirs?: string[];
   appendSystemPrompt?: string;
+  /** Extra environment for the agent process (and the commands it runs). */
+  env?: Record<string, string>;
   signal?: AbortSignal;
 };
 

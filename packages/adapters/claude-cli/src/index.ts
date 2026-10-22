@@ -121,6 +121,7 @@ export function createClaudeCliAdapter(options: ClaudeCliOptions = {}): AgentAda
       return new Promise<RunResult>((resolve, reject) => {
         const child = spawn(bin, buildArgs(req, pluginDir), {
           cwd: req.cwd,
+          env: { ...process.env, ...req.env },
           stdio: ["ignore", "pipe", "pipe"],
           signal: req.signal,
         });
