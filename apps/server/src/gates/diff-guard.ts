@@ -2,7 +2,10 @@ import type { ChangedFile } from "../git.ts";
 
 export const isTestFile = (p: string) => /(^|\/)(test|tests|__tests__|holdouts)\/|\.(test|spec)\.[cm]?[jt]sx?$/.test(p);
 
-const ASSERTION = /\b(expect|assert|should|toBe|toEqual|toThrow|toMatch|toContain|toHaveLength)\b/;
+// An assertion is a call, not a mention: `expect(…)`, `assert(…)`, `assert.x(…)`, `.toBe(…)`, `.should`.
+// Import lines that merely name `expect` are not assertions.
+const ASSERTION = /\b(expect|assert)\s*[.(]|\.(toBe|toEqual|toStrictEqual|toThrow|toMatch|toContain|toHaveLength|toHaveBeenCalled\w*|should)\b/;
+const IMPORT = /^\s*(import\b|export\s+\{|const\s+\{[^}]*\}\s*=\s*require\()/;
 const FOCUS_OR_SKIP = /\b(it|test|describe)\.(skip|only|todo)\b|\bx(it|describe)\(|\bf(it|describe)\(/;
 
 export type GuardInput = {
@@ -46,7 +49,7 @@ export function diffGuard(input: GuardInput): GuardResult {
 
     for (const line of input.existingTestDiff.split("\n")) {
       if (line.startsWith("---") || line.startsWith("+++")) continue;
-      if (line.startsWith("-") && ASSERTION.test(line)) problems.push(`removed assertion: ${line.slice(1).trim()}`);
+      if (line.startsWith("-") && !IMPORT.test(line.slice(1)) && ASSERTION.test(line)) problems.push(`removed assertion: ${line.slice(1).trim()}`);
       if (line.startsWith("+") && FOCUS_OR_SKIP.test(line)) problems.push(`added skip/only: ${line.slice(1).trim()}`);
     }
   }
