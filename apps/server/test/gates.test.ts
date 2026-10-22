@@ -46,6 +46,13 @@ describe("holdout results", () => {
     ]);
   });
 
+  it("treats regression lines as results too", () => {
+    expect(parseHoldoutResults("REG-baseline-status: FAIL down\nAC-1: PASS")).toEqual([
+      { id: "REG-baseline-status", status: "FAIL", message: "down" },
+      { id: "AC-1", status: "PASS", message: "" },
+    ]);
+  });
+
   it("gives the builder only criterion ids and scrubbed one-liners", () => {
     const fb = builderFeedback(parseHoldoutResults(out), "/secret/holdouts");
     expect(fb).toBe("AC-2 failed: archived project still on board (<holdouts>/board.spec.ts:12)");

@@ -68,7 +68,7 @@ export async function holdouts(ctx: GateContext): Promise<CheckResult> {
     if (project.appCommand) app = await bootApp(project.appCommand, ctx.worktree, project.appHealthPath);
     const r = await runShell(project.holdoutsCommand, {
       cwd: project.holdoutsPath,
-      env: { ...process.env, TEMPER_APP_URL: app?.url ?? "", TEMPER_CANDIDATE_PATH: ctx.worktree },
+      env: { ...process.env, TEMPER_APP_URL: app?.url ?? "", TEMPER_CANDIDATE_PATH: ctx.worktree, TEMPER_TICKET_ID: ctx.ticket.id },
       signal: ctx.signal,
       timeoutMs: 20 * 60_000,
     });

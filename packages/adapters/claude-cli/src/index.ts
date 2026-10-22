@@ -16,11 +16,15 @@ export type ClaudeCliOptions = {
  * memory and MCP servers out of agent runs while reusing the user's login.
  */
 export function runSettings(req: Pick<RunRequest, "denyDirs">): Record<string, unknown> {
-  const deny = (req.denyDirs ?? []).flatMap((d) => [`Read(${d}/**)`, `Edit(${d}/**)`, `Grep(${d}/**)`, `Glob(${d}/**)`]);
+  // In permission rules a single leading `/` is relative to the settings source; `//` is absolute.
+  const abs = (d: string) => (d.startsWith("/") ? `/${d}` : d);
+  const deny = (req.denyDirs ?? []).flatMap((d) => ["Read", "Edit", "Write", "Grep", "Glob"].map((t) => `${t}(${abs(d)}/**)`));
   return {
     autoMemoryEnabled: false,
     permissions: { deny },
-    sandbox: req.denyDirs?.length ? { enabled: true, filesystem: { denyRead: req.denyDirs } } : undefined,
+    sandbox: req.denyDirs?.length
+      ? { enabled: true, allowUnsandboxedCommands: false, filesystem: { denyRead: req.denyDirs } }
+      : undefined,
   };
 }
 

@@ -16,3 +16,10 @@ acceptance-criterion IDs and one-line messages, never test source.
 Physical isolation; nothing leaks by accident. Cost: a second repo per project and no
 single PR carrying code + holdouts. Encrypted-in-repo (git-crypt/sops) remains a contained
 future migration if the split proves annoying.
+
+## Verification
+`temper probe-isolation --holdouts <path>` plants a random canary in the holdouts directory and
+has a Builder-configured run try eight ways to read it (Read, Grep, Glob, cat, node, python,
+copy-then-read, symlink-then-read). The first run found a real leak: permission rules with a
+single leading `/` are relative, so the Read tool was not denied. Absolute rules use `//`, and
+the sandbox disallows unsandboxed commands. Re-run the probe after any adapter or CLI upgrade.

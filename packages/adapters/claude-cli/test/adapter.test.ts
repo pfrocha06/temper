@@ -26,7 +26,8 @@ describe("buildArgs", () => {
     expect(args).toEqual(expect.arrayContaining(["--setting-sources", "project", "--strict-mcp-config"]));
     const settings = JSON.parse(args[args.indexOf("--settings") + 1]!);
     expect(settings.autoMemoryEnabled).toBe(false);
-    expect(settings.permissions.deny).toContain("Read(/holdouts/**)");
+    expect(settings.permissions.deny).toContain("Read(//holdouts/**)");
+    expect(settings.sandbox.allowUnsandboxedCommands).toBe(false);
   });
 });
 

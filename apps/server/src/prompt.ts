@@ -43,7 +43,10 @@ export function buildPrompt(input: PromptInput): string {
 
   if (stage.role === "verifier") {
     const where: string[] = [];
-    if (input.holdoutsPath) where.push(`The holdouts repository is your working directory (${input.holdoutsPath}).`);
+    if (input.holdoutsPath) {
+      where.push(`The holdouts repository is your working directory (${input.holdoutsPath}). Follow its README.md conventions.`);
+      where.push(`Write this ticket's checks under \`tickets/${ticket.id}/\`. Never weaken or delete existing checks.`);
+    }
     if (input.worktreePath) where.push(`The candidate code is at ${input.worktreePath}. Do not modify it.`);
     if (input.appUrl) where.push(`The candidate app is running at ${input.appUrl}.`);
     where.push("Report each criterion on its own line as `AC-<id>: PASS` or `AC-<id>: FAIL <one-line reason>`.");
