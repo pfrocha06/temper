@@ -52,6 +52,50 @@ describe("toRunLine", () => {
   });
 });
 
+describe("usage and rate-limit events", () => {
+  it("summarises tokens per model, largest first, excluding cache reads from the count", () => {
+    const line = toRunLine(
+      ev(9, {
+        kind: "usage",
+        apiMs: 42_000,
+        models: {
+          "claude-haiku": { inputTokens: 100, outputTokens: 50, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0.001 },
+          "claude-sonnet": { inputTokens: 1_000, outputTokens: 2_100, cacheReadTokens: 48_000, cacheWriteTokens: 9_200, costUsd: 0.25 },
+        },
+      }),
+    );
+    expect(line).toEqual({
+      id: 9,
+      at,
+      kind: "usage",
+      total: "12.4k",
+      cost: "$0.25",
+      apiTime: "42s",
+      models: [
+        { model: "claude-sonnet", tokens: 12_300, text: "12.3k (2.1k out, 48k cached)" },
+        { model: "claude-haiku", tokens: 150, text: "150 (50 out)" },
+      ],
+    });
+  });
+
+  it("omits cost when the provider reports none", () => {
+    const line = toRunLine(ev(10, { kind: "usage", models: { m: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0 } } }));
+    expect(line).toMatchObject({ kind: "usage", total: "2" });
+    expect(line).not.toHaveProperty("cost", expect.anything());
+  });
+
+  it("does not guess counts that did not arrive as numbers", () => {
+    const line = toRunLine(ev(13, { kind: "usage", models: { m: { inputTokens: "[redacted]", outputTokens: "[redacted]", cacheReadTokens: "[redacted]", cacheWriteTokens: "[redacted]", costUsd: 0.2 } } }));
+    expect(line).toMatchObject({ kind: "usage", total: undefined, cost: "$0.20", models: [{ model: "m", text: "tokens not recorded" }] });
+  });
+
+  it("keeps a limit report as reported, with the reset as a timestamp", () => {
+    const line = toRunLine(ev(11, { kind: "rate_limit", limitType: "five_hour", status: "allowed", resetsAt: 1_792_000_000, raw: {} }));
+    expect(line).toEqual({ id: 11, at, kind: "rate_limit", limitType: "five_hour", status: "allowed", resetsAt: new Date(1_792_000_000_000).toISOString() });
+    expect(toRunLine(ev(12, { kind: "rate_limit", limitType: "seven_day", status: "rejected", raw: {} }))).toMatchObject({ resetsAt: undefined });
+  });
+});
+
 describe("mergeEvents", () => {
   it("orders by id and drops duplicates from history and the live stream", () => {
     const history = [ev(1, { kind: "text", text: "a" }), ev(2, { kind: "text", text: "b" })];

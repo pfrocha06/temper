@@ -11,7 +11,7 @@ import { useLiveUpdates } from "@/hooks/use-live-updates";
 import { useProject } from "@/hooks/use-project";
 import { NewEnvironmentDialog } from "./environment-picker";
 import { FactoryBar } from "./factory-bar";
-import { NAV, NavRail } from "./nav-rail";
+import { NAV, NavRail, SETTINGS } from "./nav-rail";
 
 export function AppShell() {
   return (
@@ -27,7 +27,7 @@ function Shell() {
   const { project } = useProject();
   const actions = useAppActions();
   useHotkeys({
-    ...Object.fromEntries(NAV.map((n) => [`g ${n.key}`, () => navigate(n.to)])),
+    ...Object.fromEntries([...NAV, SETTINGS].map((n) => [`g ${n.key}`, () => navigate(n.to)])),
     n: () => project && actions.show("new-ticket"),
     i: () => project && actions.show("import-spec"),
   });

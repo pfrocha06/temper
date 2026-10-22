@@ -1,5 +1,6 @@
-import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
+import { queryOptions, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { api, patch, post, put } from "./api";
+import type { ProviderInfo } from "./providers";
 import type {
   Agent,
   AgentEdit,
@@ -20,7 +21,9 @@ import type {
   TemperatureReport,
   Ticket,
   TicketDetail,
+  ProviderCaps,
   ToolsInventory,
+  UsageReport,
 } from "./types";
 
 /** Query key roots. Live updates invalidate by root. */
@@ -40,6 +43,10 @@ export const keys = {
   chats: ["chats"] as const,
   chat: (id: string) => ["chat", id] as const,
   tools: ["tools"] as const,
+  providers: ["providers"] as const,
+  usage: ["usage"] as const,
+  /** Proposals the board resolved in this session (the API lists pending approvals only). */
+  resolvedProposals: ["resolved-proposals"] as const,
 };
 
 export type KeyRoot =
@@ -57,7 +64,9 @@ export type KeyRoot =
   | "knowledge"
   | "chats"
   | "chat"
-  | "tools";
+  | "tools"
+  | "providers"
+  | "usage";
 
 const enc = encodeURIComponent;
 
@@ -106,6 +115,37 @@ export const chatsQuery = (environmentId: string | undefined) =>
   });
 export const chatQuery = (id: string) => queryOptions({ queryKey: keys.chat(id), queryFn: () => api<ChatDetail>(`/chats/${enc(id)}`) });
 export const toolsQuery = queryOptions({ queryKey: keys.tools, queryFn: () => api<ToolsInventory>("/tools"), staleTime: 60_000 });
+export type UsageQuery = { from: string; to: string; projectId?: string };
+export const usageQuery = (q: UsageQuery) =>
+  queryOptions({
+    queryKey: [...keys.usage, q.from, q.to, q.projectId ?? ""],
+    queryFn: () => api<UsageReport>(`/usage?from=${enc(q.from)}&to=${enc(q.to)}${q.projectId ? `&projectId=${enc(q.projectId)}` : ""}`),
+    // Keep the frame while a new range loads.
+    placeholderData: (prev) => prev,
+  });
+
+/**
+ * Resolved proposals kept client-side so a conversation can show their outcome. The query
+ * function returns what is already cached, so a global refetch never empties it.
+ */
+export const resolvedProposalsQuery = (qc: QueryClient) =>
+  queryOptions({
+    queryKey: keys.resolvedProposals,
+    queryFn: () => qc.getQueryData<Approval[]>(keys.resolvedProposals) ?? [],
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+
+export function rememberResolved(qc: QueryClient, approval: Approval) {
+  qc.setQueryData<Approval[]>(keys.resolvedProposals, (list = []) => [...list.filter((a) => a.id !== approval.id), approval]);
+}
+
+export function forgetResolved(qc: QueryClient, id: string) {
+  qc.setQueryData<Approval[]>(keys.resolvedProposals, (list = []) => list.filter((a) => a.id !== id));
+}
+
+/** Probes each provider's CLI on the server, so it is not polled fast; finished runs invalidate it. */
+export const providersQuery = queryOptions({ queryKey: keys.providers, queryFn: () => api<ProviderInfo[]>("/providers"), staleTime: 15_000, refetchInterval: 60_000 });
 
 // ── mutations ─────────────────────────────────────────────────────────────
 
@@ -157,3 +197,6 @@ export const useStartChat = () =>
 
 export const useSendChatMessage = () =>
   useInvalidating(({ chatId, message }: { chatId: string; message: string }) => post<{ ok: true }>(`/chats/${enc(chatId)}/messages`, { message }), [keys.chats, ["chat"]]);
+
+export const useSetCaps = () =>
+  useInvalidating(({ id, caps }: { id: string; caps: ProviderCaps }) => put<ProviderCaps>(`/providers/${enc(id)}/caps`, caps), [keys.providers, keys.status]);

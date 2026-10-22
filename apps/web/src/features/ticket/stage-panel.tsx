@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { cn } from "cn";
 import { Markdown } from "@/components/markdown";
 import { STATE_LABEL } from "@/components/pipeline";
+import { AgentProviderLogo } from "@/components/provider-logo";
 import { RoleAvatar, roleMeta } from "@/components/role";
 import { Button } from "@/components/ui/button";
 import { useNow } from "@/hooks/use-now";
@@ -45,6 +46,7 @@ export function StagePanel({ node }: { node: PipelineNode }) {
             </span>
           </h2>
           <p className="text-xs text-muted-foreground">
+            <AgentProviderLogo agentId={node.actor} size="xs" tooltip className="mr-1 -mt-0.5 align-middle" />
             {m.label}
             {node.actor === "server" ? null : <span className="font-mono"> v{attempt.agentVersion}</span>}
             {attempt.startedAt ? `, ${duration(attempt.startedAt, attempt.finishedAt, now)}` : ""}, {relativeTime(attempt.createdAt, now)}

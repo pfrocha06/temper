@@ -13,10 +13,34 @@ const ACTION_LABEL: Record<string, string> = {
   projects_list: "Looked at projects",
   tickets_list: "Looked at tickets",
   ticket_create: "Created ticket",
+  ticket_start: "Started ticket",
+  ticket_cancel: "Cancelled ticket",
+  ticket_retry: "Retried stage",
+  ticket_digest: "Re-ran digest",
+  factory_pause: "Paused the factory",
+  factory_resume: "Resumed the factory",
+  project_register: "Registered project",
+  approvals_list: "Looked at the Inbox",
+  propose_decision: "Proposed a decision",
+  propose_deploy: "Proposed a deploy",
 };
 
 /** Actions that change something; the rest only read. */
-const WRITES = new Set(["knowledge_add", "knowledge_update", "knowledge_archive", "ticket_create"]);
+const WRITES = new Set([
+  "knowledge_add",
+  "knowledge_update",
+  "knowledge_archive",
+  "ticket_create",
+  "ticket_start",
+  "ticket_cancel",
+  "ticket_retry",
+  "ticket_digest",
+  "factory_pause",
+  "factory_resume",
+  "project_register",
+  "propose_decision",
+  "propose_deploy",
+]);
 
 export type ActionMeta = { label: string; write: boolean; href?: string };
 
@@ -39,10 +63,23 @@ export function actionMeta(action: ChatAction): ActionMeta {
   if (tool.startsWith("knowledge_")) {
     if (/^kn_[\w-]+$/.test(s)) href = `/knowledge/${s}`;
     else if (s) href = `/knowledge?q=${encodeURIComponent(s)}`;
-  } else if (tool === "ticket_create" || tool === "tickets_list") {
+  } else if (tool.startsWith("ticket_") && /^tkt_[\w-]+$/.test(s)) {
+    href = `/tickets/${s}`;
+  } else if (tool === "ticket_create" || tool === "tickets_list" || tool.startsWith("ticket_")) {
     href = "/board";
+  } else if (tool === "approvals_list" || tool.startsWith("propose_")) {
+    href = "/inbox";
   }
   return { label, write, href };
+}
+
+/** The one input that says what a Temper tool call was about. */
+export function temperSummary(tool: string, input: Record<string, unknown>): string {
+  const str = (v: unknown) => (typeof v === "string" ? v : "");
+  if (tool === "propose_decision") return [str(input.resolution), str(input.approvalId)].filter(Boolean).join(" ");
+  if (tool === "propose_deploy") return [str(input.ref) || "main", str(input.source) && `from ${str(input.source).split("/").filter(Boolean).at(-1)}`].filter(Boolean).join(" ");
+  if (tool === "project_register") return str(input.name);
+  return String(input.title ?? input.query ?? input.id ?? input.ticketId ?? "").slice(0, 120);
 }
 
 /** One row of the Chief's in-progress turn. */
@@ -69,7 +106,7 @@ export function thinkingItems(events: RunEvent[]): ThinkingItem[] {
       case "tool_use": {
         const input = (e.input ?? {}) as Record<string, unknown>;
         const temper = e.tool.startsWith(TEMPER_PREFIX);
-        const summary = temper ? String(input.title ?? input.query ?? input.id ?? "").slice(0, 120) : summarizeToolInput(e.input, 120);
+        const summary = temper ? temperSummary(shortTool(e.tool), input) : summarizeToolInput(e.input, 120);
         const action = { tool: shortTool(e.tool), summary };
         out.push({ key, kind: "action", tool: e.tool, action, meta: actionMeta(action), state: "running" });
         return;

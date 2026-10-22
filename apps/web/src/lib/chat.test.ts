@@ -1,6 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { actionMeta, chatStreamReducer, chatTitle, initialChatStream, isSendKey, shortTool, thinkingItems } from "./chat";
+import { actionMeta, chatStreamReducer, chatTitle, initialChatStream, isSendKey, shortTool, temperSummary, thinkingItems } from "./chat";
 import type { RunEvent } from "./types";
+
+describe("operator actions", () => {
+  it("labels the Chief's operator tools and links them", () => {
+    expect(actionMeta({ tool: "propose_decision", summary: "accept apv_1" })).toEqual({ label: "Proposed a decision", write: true, href: "/inbox" });
+    expect(actionMeta({ tool: "propose_deploy", summary: "main" })).toMatchObject({ label: "Proposed a deploy", href: "/inbox" });
+    expect(actionMeta({ tool: "ticket_retry", summary: "tkt_ab12" })).toEqual({ label: "Retried stage", write: true, href: "/tickets/tkt_ab12" });
+    expect(actionMeta({ tool: "factory_pause", summary: "" })).toMatchObject({ label: "Paused the factory", write: true });
+    expect(actionMeta({ tool: "approvals_list", summary: "" })).toEqual({ label: "Looked at the Inbox", write: false, href: "/inbox" });
+    expect(actionMeta({ tool: "project_register", summary: "web" }).label).toBe("Registered project");
+  });
+
+  it("summarises what a proposal or ticket action was about", () => {
+    expect(temperSummary("propose_decision", { approvalId: "apv_1", resolution: "accept", reason: "tests pass" })).toBe("accept apv_1");
+    expect(temperSummary("propose_deploy", { source: "/dev/temper", reason: "x" })).toBe("main from temper");
+    expect(temperSummary("ticket_start", { ticketId: "tkt_1" })).toBe("tkt_1");
+  });
+});
 
 describe("actionMeta", () => {
   it("links knowledge ids to the entry and titles or queries to a search", () => {

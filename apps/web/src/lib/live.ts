@@ -8,7 +8,7 @@ export function rootsForAudit(kind: string): KeyRoot[] {
     case "spec":
       return ["tickets", "ticket", "status"];
     case "dispatch":
-      return ["dispatches", "dispatch", "ticket", "status", "agents"];
+      return ["dispatches", "dispatch", "ticket", "status", "agents", "providers", "usage"];
     case "approval":
       return ["approvals", "status", "tickets", "ticket"];
     case "agent":
@@ -26,7 +26,9 @@ export function rootsForAudit(kind: string): KeyRoot[] {
     case "knowledge":
       return ["knowledge"];
     case "chat":
-      return ["chats"];
+      return ["chats", "providers", "usage"];
+    case "provider":
+      return ["providers", "status"];
     case "digest":
       return ["dispatches", "dispatch", "ticket"];
     default:

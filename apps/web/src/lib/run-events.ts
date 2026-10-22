@@ -1,4 +1,5 @@
-import type { DispatchEvent } from "./types";
+import { compactNumber, formatUsd } from "./providers";
+import type { DispatchEvent, ModelUsage } from "./types";
 
 export type RunLineTone = "default" | "muted" | "error" | "success";
 
@@ -11,6 +12,10 @@ export type RunLine =
   | { id: number; at: string; kind: "result"; isError: boolean; text: string; meta: string }
   | { id: number; at: string; kind: "init"; text: string }
   | { id: number; at: string; kind: "rate_limited"; text: string }
+  /** The provider's usage report: tokens per model, compact. */
+  | { id: number; at: string; kind: "usage"; models: Array<{ model: string; tokens: number; text: string }>; total?: string; cost?: string; apiTime?: string }
+  /** A limit report, exactly as the provider states it. */
+  | { id: number; at: string; kind: "rate_limit"; limitType: string; status: string; resetsAt?: string }
   /** A server gate check folded from its events: started, streamed output, outcome. */
   | { id: number; at: string; kind: "gate"; check: string; command: string; output: string; outcome?: { isError: boolean; text: string; at: string } };
 
@@ -95,8 +100,52 @@ export function toRunLine(e: DispatchEvent): RunLine {
       return { ...base, kind: "init", text: `Session ${e.payload.sessionId}${e.payload.model ? ` on ${e.payload.model}` : ""}` };
     case "rate_limited":
       return { ...base, kind: "rate_limited", text: e.payload.text };
+    case "usage":
+      return { ...base, ...usageLine(e.payload.models ?? {}, e.payload.apiMs) };
+    case "rate_limit":
+      return {
+        ...base,
+        kind: "rate_limit",
+        limitType: e.payload.limitType,
+        status: e.payload.status,
+        resetsAt: typeof e.payload.resetsAt === "number" ? new Date(e.payload.resetsAt * 1000).toISOString() : undefined,
+      };
   }
 }
+
+/**
+ * One run's tokens per model, counted the way the Providers page counts them (input + output +
+ * cache writes; cache reads excluded), e.g. `sonnet 12.3k (2.1k out, 48k cached)`.
+ * Counts that did not arrive as numbers (an older server redacted them) are left out, not guessed.
+ */
+function usageLine(models: Record<string, Partial<Record<keyof ModelUsage, unknown>>>, apiMs?: number): Omit<Extract<RunLine, { kind: "usage" }>, "id" | "at"> {
+  let total = 0;
+  let counted = false;
+  let cost = 0;
+  let costed = false;
+  const rows = Object.entries(models).map(([model, u]) => {
+    const [input, output, cacheRead, cacheWrite] = [u.inputTokens, u.outputTokens, u.cacheReadTokens, u.cacheWriteTokens].map(num);
+    if (num(u.costUsd) !== undefined) {
+      cost += u.costUsd as number;
+      costed = true;
+    }
+    if (input === undefined || output === undefined || cacheWrite === undefined) return { model, tokens: 0, text: "tokens not recorded" };
+    const tokens = input + output + cacheWrite;
+    total += tokens;
+    counted = true;
+    const extra = [`${compactNumber(output)} out`, cacheRead ? `${compactNumber(cacheRead)} cached` : ""].filter(Boolean).join(", ");
+    return { model, tokens, text: `${compactNumber(tokens)} (${extra})` };
+  });
+  return {
+    kind: "usage",
+    models: rows.toSorted((a, b) => b.tokens - a.tokens),
+    total: counted ? compactNumber(total) : undefined,
+    cost: costed ? formatUsd(cost) : undefined,
+    apiTime: apiMs !== undefined ? formatMs(apiMs) : undefined,
+  };
+}
+
+const num = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
 
 /** Merges two event lists by id, ascending, without duplicates. */
 export function mergeEvents(a: DispatchEvent[], b: DispatchEvent[]): DispatchEvent[] {

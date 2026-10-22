@@ -11,7 +11,9 @@ import type {
   Environment as EnvironmentRow,
   KnowledgeEntry as KnowledgeEntryRow,
   KnowledgeKind,
+  ModelUsage,
   Project as ProjectRow,
+  ProviderCaps,
   Regime,
   RegimePolicy,
   Role,
@@ -20,6 +22,9 @@ import type {
   Ticket as TicketRow,
   TicketStatus,
   TicketType,
+  UsageWindow,
+  UsageReport as UsageReportRow,
+  UsageBucket,
 } from "@temper/core";
 
 /** What a row looks like after JSON: dates become ISO strings. */
@@ -132,4 +137,7 @@ export type ToolsInventory = {
   connectors: Array<{ id: string; status: ToolStatus; detail: string }>;
 };
 
-export type { Contribution, KnowledgeKind, Regime, RegimePolicy, Role, RunEvent, TicketStatus, TicketType };
+export type UsageReport = Json<UsageReportRow>;
+export type TicketUsage = UsageReport["byTicket"][number];
+
+export type { UsageBucket, Contribution, KnowledgeKind, ModelUsage, ProviderCaps, UsageWindow, Regime, RegimePolicy, Role, RunEvent, TicketStatus, TicketType };

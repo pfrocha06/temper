@@ -1,6 +1,7 @@
 import { lazy, type ComponentType } from "react";
 import { Link, Navigate, Route, Routes } from "react-router";
 import { AppShell } from "@/components/shell/app-shell";
+import { SettingsLayout } from "@/features/settings/settings-layout";
 
 // Pages load on first visit; the shell and data layer are in the entry chunk.
 const page = <K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) =>
@@ -15,7 +16,9 @@ const AgentsPage = page(() => import("@/features/agents/agents-page"), "AgentsPa
 const SkillsPage = page(() => import("@/features/skills/skills-page"), "SkillsPage");
 const ChiefPage = page(() => import("@/features/chief/chief-page"), "ChiefPage");
 const KnowledgePage = page(() => import("@/features/knowledge/knowledge-page"), "KnowledgePage");
-const ToolsPage = page(() => import("@/features/tools/tools-page"), "ToolsPage");
+const UsagePage = page(() => import("@/features/usage/usage-page"), "UsagePage");
+const ToolsPage = page(() => import("@/features/settings/tools-page"), "ToolsPage");
+const ProvidersPage = page(() => import("@/features/settings/providers-page"), "ProvidersPage");
 
 export function App() {
   return (
@@ -26,13 +29,19 @@ export function App() {
         <Route path="chief/:chatId" element={<ChiefPage />} />
         <Route path="knowledge" element={<KnowledgePage />} />
         <Route path="knowledge/:id" element={<KnowledgePage />} />
-        <Route path="tools" element={<ToolsPage />} />
+        <Route path="tools" element={<Navigate to="/settings/tools" replace />} />
+        <Route path="settings" element={<SettingsLayout />}>
+          <Route index element={<Navigate to="/settings/providers" replace />} />
+          <Route path="providers" element={<ProvidersPage />} />
+          <Route path="tools" element={<ToolsPage />} />
+        </Route>
         <Route path="board" element={<BoardPage />} />
         <Route path="tickets/:id" element={<TicketPage />} />
         <Route path="runs" element={<RunsPage />} />
         <Route path="runs/:dispatchId" element={<RunsPage />} />
         <Route path="inbox" element={<InboxPage />} />
         <Route path="thermostat" element={<ThermostatPage />} />
+        <Route path="usage" element={<UsagePage />} />
         <Route path="agents" element={<AgentsPage />} />
         <Route path="skills" element={<SkillsPage />} />
         <Route path="*" element={<NotFound />} />

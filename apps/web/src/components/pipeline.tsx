@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useNow } from "@/hooks/use-now";
 import { duration } from "@/lib/format";
 import type { NodeState, PipelineNode } from "@/lib/pipeline";
+import { AgentProviderLogo } from "./provider-logo";
 import { roleMeta } from "./role";
 
 export const STATE_LABEL: Record<NodeState, string> = {
@@ -184,7 +185,8 @@ export function Pipeline({ nodes, size = "md", selected, onSelect, className }: 
                     </span>
                   )}
                 </TooltipTrigger>
-                <TooltipContent>
+                <TooltipContent className="flex items-center gap-1.5">
+                  <AgentProviderLogo agentId={n.actor} size="xs" />
                   {m.label} · {STATE_LABEL[n.state]}
                   {n.stale ? " (superseded)" : ""}
                   {time ? ` · ${time}` : ""}

@@ -9,7 +9,8 @@ describe("rootsForAudit", () => {
     expect(rootsForAudit("factory.paused")).toEqual(["status"]);
     expect(rootsForAudit("agent.saved")).toContain("agents");
     expect(rootsForAudit("knowledge.added")).toEqual(["knowledge"]);
-    expect(rootsForAudit("chat.started")).toEqual(["chats"]);
+    expect(rootsForAudit("chat.started")).toContain("chats");
+    expect(rootsForAudit("provider.caps_set")).toContain("providers");
     expect(rootsForAudit("environment.created")).toEqual(["environments", "projects"]);
   });
 

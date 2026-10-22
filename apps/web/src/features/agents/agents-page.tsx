@@ -4,12 +4,14 @@ import { useMemo } from "react";
 import { Link } from "react-router";
 import { cn } from "cn";
 import { PageHeader, QueryError, RowsSkeleton } from "@/components/query-state";
+import { ProviderLogo } from "@/components/provider-logo";
 import { RoleAvatar, roleMeta } from "@/components/role";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { agentStats, type AgentStats } from "@/lib/agent-stats";
 import { percent } from "@/lib/format";
+import { vendorOfAdapter } from "@/lib/providers";
 import { agentsQuery, approvalsQuery, dispatchesQuery, statusQuery } from "@/lib/queries";
 import type { Agent } from "@/lib/types";
 import { AgentEditDialog } from "./agent-edit-dialog";
@@ -122,6 +124,7 @@ function AgentCard({ agent, stats, active, awaitingApproval }: { agent: Agent; s
               {agent.model ?? "default model"}
             </Badge>
             <Badge variant="outline" className="font-mono">
+              <ProviderLogo vendor={vendorOfAdapter(agent.adapter)} size="xs" label={false} />
               {agent.adapter}
             </Badge>
           </p>
