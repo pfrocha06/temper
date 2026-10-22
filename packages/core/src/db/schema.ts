@@ -1,0 +1,166 @@
+import { sql } from "drizzle-orm";
+import {
+  bigserial,
+  doublePrecision,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
+
+const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
+
+export const projects = pgTable("projects", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  repoPath: text("repo_path").notNull(),
+  remoteUrl: text("remote_url"),
+  holdoutsPath: text("holdouts_path"),
+  defaultBranch: text("default_branch").notNull().default("main"),
+  createdAt: createdAt(),
+});
+
+export type AgentPermissions = {
+  allowedTools: string[];
+  disallowedTools: string[];
+};
+
+export const agents = pgTable(
+  "agents",
+  {
+    id: text("id").notNull(),
+    version: integer("version").notNull(),
+    role: text("role").notNull(),
+    name: text("name").notNull(),
+    adapter: text("adapter").notNull(),
+    model: text("model"),
+    skills: jsonb("skills").$type<string[]>().notNull().default([]),
+    permissions: jsonb("permissions").$type<AgentPermissions>().notNull(),
+    maxConcurrency: integer("max_concurrency").notNull().default(1),
+    runsPerHour: integer("runs_per_hour").notNull().default(6),
+    instructions: text("instructions").notNull().default(""),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.id, t.version] })],
+);
+
+export type AcceptanceCriterion = { id: string; text: string };
+
+export const tickets = pgTable(
+  "tickets",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id),
+    type: text("type").notNull(),
+    title: text("title").notNull(),
+    spec: text("spec").notNull().default(""),
+    acceptanceCriteria: jsonb("acceptance_criteria").$type<AcceptanceCriterion[]>().notNull().default([]),
+    fileScope: jsonb("file_scope").$type<string[]>().notNull().default([]),
+    dependsOn: jsonb("depends_on").$type<string[]>().notNull().default([]),
+    parentId: text("parent_id"),
+    status: text("status").notNull().default("backlog"),
+    stage: text("stage"),
+    branch: text("branch"),
+    worktreePath: text("worktree_path"),
+    prUrl: text("pr_url"),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("tickets_status_idx").on(t.status)],
+);
+
+export const dispatches = pgTable(
+  "dispatches",
+  {
+    id: text("id").primaryKey(),
+    ticketId: text("ticket_id")
+      .notNull()
+      .references(() => tickets.id),
+    stage: text("stage").notNull(),
+    agentId: text("agent_id").notNull(),
+    agentVersion: integer("agent_version").notNull(),
+    attempt: integer("attempt").notNull(),
+    status: text("status").notNull().default("queued"),
+    verdict: text("verdict"),
+    summary: text("summary"),
+    sessionId: text("session_id"),
+    temperatureSnapshotId: integer("temperature_snapshot_id"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("dispatches_ticket_idx").on(t.ticketId), index("dispatches_status_idx").on(t.status)],
+);
+
+export const dispatchEvents = pgTable(
+  "dispatch_events",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    dispatchId: text("dispatch_id")
+      .notNull()
+      .references(() => dispatches.id),
+    kind: text("kind").notNull(),
+    payload: jsonb("payload").notNull(),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("dispatch_events_dispatch_idx").on(t.dispatchId, t.id)],
+);
+
+export const artifacts = pgTable(
+  "artifacts",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    ticketId: text("ticket_id")
+      .notNull()
+      .references(() => tickets.id),
+    dispatchId: text("dispatch_id").references(() => dispatches.id),
+    name: text("name").notNull(),
+    content: text("content").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("artifacts_ticket_idx").on(t.ticketId)],
+);
+
+export const approvals = pgTable(
+  "approvals",
+  {
+    id: text("id").primaryKey(),
+    ticketId: text("ticket_id").references(() => tickets.id),
+    kind: text("kind").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull().default(""),
+    options: jsonb("options").$type<string[]>().notNull().default(["approve", "reject"]),
+    status: text("status").notNull().default("pending"),
+    resolution: text("resolution"),
+    note: text("note"),
+    createdAt: createdAt(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (t) => [index("approvals_status_idx").on(t.status)],
+);
+
+export const auditEvents = pgTable(
+  "audit_events",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+    actor: text("actor").notNull(),
+    kind: text("kind").notNull(),
+    subject: text("subject"),
+    data: jsonb("data").notNull().default(sql`'{}'::jsonb`),
+  },
+  (t) => [index("audit_events_kind_idx").on(t.kind, t.at)],
+);
+
+export const temperatureSnapshots = pgTable("temperature_snapshots", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  value: doublePrecision("value").notNull(),
+  regime: text("regime").notNull(),
+  contributions: jsonb("contributions").notNull(),
+});

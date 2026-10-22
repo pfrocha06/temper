@@ -1,0 +1,38 @@
+type: skill
+description: Author or edit a skill; adopted only with eval evidence and board approval.
+requiresBoardApproval: true
+start: author
+stages:
+  - id: author
+    kind: agent
+    role: builder
+    artifact: changes.md
+    instructions: |
+      Write or edit the skill under skills/. State the failure it fixes and how you will know
+      it worked. Keep it short; prefer structure over prose. Commit locally.
+    on: { PASS: eval, FAIL: author, BLOCKED: board }
+  - id: eval
+    kind: agent
+    role: verifier
+    artifact: eval.md
+    instructions: |
+      Run a blind A/B: the same tasks with and without the skill, judged without knowing which
+      is which. Report the tasks, both outcomes and the verdict per task.
+    on: { PASS: gates, FAIL: author, BLOCKED: board }
+  - id: gates
+    kind: gate
+    checks: [diff_guard, secret_scan]
+    on: { PASS: review, FAIL: author }
+  - id: review
+    kind: agent
+    role: reviewer
+    artifact: review.md
+    readOnly: true
+    instructions: |
+      Does the eval support adopting the skill? Could the skill mislead an agent?
+      PASS only with no BLOCKER.
+    on: { PASS: pr, FAIL: author }
+  - id: pr
+    kind: gate
+    checks: [open_pr, await_merge]
+    on: { PASS: done, FAIL: board }

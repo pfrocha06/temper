@@ -1,0 +1,23 @@
+type: verification
+description: Create or maintain holdouts and the verification skill. Verifier-owned; board approval required.
+requiresBoardApproval: true
+start: author
+stages:
+  - id: author
+    kind: agent
+    role: verifier
+    artifact: verification.md
+    instructions: |
+      Update the holdouts or the project's verification skill so they match the feature map.
+      Every removed or weakened check needs a written justification tied to a spec change.
+      Run the full holdout suite against the running app and report results.
+    on: { PASS: review, FAIL: author, BLOCKED: board }
+  - id: review
+    kind: agent
+    role: reviewer
+    artifact: review.md
+    readOnly: true
+    instructions: |
+      Does this lower the bar anywhere? Flag every weakened or deleted check as BLOCKER unless
+      its justification holds. PASS only with no BLOCKER.
+    on: { PASS: board, FAIL: author }

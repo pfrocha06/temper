@@ -1,0 +1,18 @@
+# 1. Holdouts live in a separate repository
+
+Status: accepted
+
+## Context
+Holdout tests only measure anything if the Builder cannot read them. A git worktree shares
+the full object store, so tests in the same repo are readable through `git show` / `git log -p`
+even when sparse-checked-out, and they appear in PR diffs.
+
+## Decision
+Holdouts live in a separate private repository per project, configured in the profile.
+Only the server and the Verifier's sandbox can read it. Builders receive failing
+acceptance-criterion IDs and one-line messages, never test source.
+
+## Consequences
+Physical isolation; nothing leaks by accident. Cost: a second repo per project and no
+single PR carrying code + holdouts. Encrypted-in-repo (git-crypt/sops) remains a contained
+future migration if the split proves annoying.

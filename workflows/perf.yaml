@@ -1,0 +1,38 @@
+type: perf
+description: Improve a measured slowdown against a baseline.
+start: baseline
+stages:
+  - id: baseline
+    kind: agent
+    role: builder
+    artifact: baseline.md
+    readOnly: true
+    instructions: |
+      Measure the baseline with a repeatable command. Report the number, its variance across
+      runs, and what dominates it. If you cannot measure it reliably, end BLOCKED.
+    on: { PASS: build, FAIL: baseline, BLOCKED: board }
+  - id: build
+    kind: agent
+    role: builder
+    artifact: changes.md
+    instructions: |
+      Make one change at a time and re-measure with the baseline command. Keep only changes
+      that move the number beyond its noise. Explain why the number moved. Commit locally.
+    on: { PASS: gates, FAIL: build, BLOCKED: board }
+  - id: gates
+    kind: gate
+    checks: [builder_tests, diff_guard, secret_scan, holdouts]
+    on: { PASS: review, FAIL: build }
+  - id: review
+    kind: agent
+    role: reviewer
+    artifact: review.md
+    readOnly: true
+    instructions: |
+      Re-run the measurement. Is the improvement real, beyond noise, and explained? Any
+      behaviour change? Findings as BLOCKER / SHOULD / NIT. PASS only with no BLOCKER.
+    on: { PASS: pr, FAIL: build }
+  - id: pr
+    kind: gate
+    checks: [open_pr, await_merge]
+    on: { PASS: done, FAIL: board }

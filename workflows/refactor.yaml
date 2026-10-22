@@ -1,0 +1,29 @@
+type: refactor
+description: Change structure without changing behaviour.
+start: build
+stages:
+  - id: build
+    kind: agent
+    role: builder
+    artifact: changes.md
+    instructions: |
+      Restructure the code without changing behaviour. Do not add, remove or edit tests.
+      Prefer deleting code to adding it. Commit locally in small steps. Never push.
+    on: { PASS: gates, FAIL: build, BLOCKED: board }
+  - id: gates
+    kind: gate
+    checks: [builder_tests, diff_guard, secret_scan, holdouts]
+    on: { PASS: review, FAIL: build }
+  - id: review
+    kind: agent
+    role: reviewer
+    artifact: review.md
+    readOnly: true
+    instructions: |
+      Look for any behaviour change, however small. Judge whether the new structure is simpler
+      for a reader. Findings as BLOCKER / SHOULD / NIT. PASS only with no BLOCKER.
+    on: { PASS: pr, FAIL: build }
+  - id: pr
+    kind: gate
+    checks: [open_pr, await_merge]
+    on: { PASS: done, FAIL: board }

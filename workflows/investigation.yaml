@@ -1,0 +1,21 @@
+type: investigation
+description: Answer a question about how or why the code works. Read-only; output is a cited document.
+start: investigate
+stages:
+  - id: investigate
+    kind: agent
+    role: planner
+    artifact: investigation.md
+    readOnly: true
+    instructions: |
+      Answer the question from primary sources: code, git history, runtime behaviour.
+      Cite file:line or commit for every claim. Separate what you verified from what you infer.
+    on: { PASS: review, FAIL: investigate, BLOCKED: board }
+  - id: review
+    kind: agent
+    role: reviewer
+    artifact: review.md
+    readOnly: true
+    instructions: |
+      Check every citation supports its claim. PASS only if the answer is supported.
+    on: { PASS: done, FAIL: investigate }
