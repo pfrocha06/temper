@@ -76,6 +76,7 @@ const NewTicket = z.object({
   acceptanceCriteria: z.array(z.string()).default([]),
   fileScope: z.array(z.string()).default([]),
   dependsOn: z.array(z.string()).default([]),
+  externalRef: z.object({ tracker: z.string().min(1), key: z.string().min(1), url: z.url({ protocol: /^https?$/ }) }).optional(),
   ready: z.boolean().default(false),
 });
 

@@ -8,6 +8,7 @@ import { Markdown } from "@/components/markdown";
 import { Pipeline } from "@/components/pipeline";
 import { QueryError, RowsSkeleton } from "@/components/query-state";
 import { RoleAvatar } from "@/components/role";
+import { ExternalRefChip } from "@/components/badges";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
@@ -199,6 +200,7 @@ function TicketHeader({ ticket }: { ticket: Ticket }) {
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <Badge variant="secondary">{ticket.type}</Badge>
             <Badge variant="outline">{STATUS_LABEL[ticket.status as TicketStatus] ?? ticket.status}</Badge>
+            <ExternalRefChip externalRef={ticket.externalRef} />
             {ticket.prUrl ? (
               <Badge variant="outline" asChild>
                 <a href={ticket.prUrl} target="_blank" rel="noreferrer noopener">

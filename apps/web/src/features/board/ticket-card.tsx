@@ -3,6 +3,7 @@ import { CheckCheckIcon, EllipsisIcon, ExternalLinkIcon, GitPullRequestIcon, Pla
 import { memo } from "react";
 import { Link } from "react-router";
 import { cn } from "cn";
+import { ExternalRefChip } from "@/components/badges";
 import { PipelineStrip } from "@/components/pipeline";
 import { RoleAvatar } from "@/components/role";
 import { Button } from "@/components/ui/button";
@@ -82,6 +83,11 @@ export const TicketCard = memo(function TicketCard({ ticket, nodes, live, now, f
           {ticket.title}
         </button>
       </h3>
+      {ticket.externalRef ? (
+        <div className="flex">
+          <ExternalRefChip externalRef={ticket.externalRef} />
+        </div>
+      ) : null}
       <div className="flex items-center gap-2">
         <PipelineStrip nodes={nodes} className={cn(status === "backlog" && "opacity-50")} />
         {acCount > 0 ? (

@@ -71,6 +71,9 @@ export const agents = pgTable(
 
 export type AcceptanceCriterion = { id: string; text: string };
 
+/** A ticket's counterpart in an external tracker such as Jira. */
+export type ExternalRef = { tracker: string; key: string; url: string };
+
 export const tickets = pgTable(
   "tickets",
   {
@@ -90,6 +93,7 @@ export const tickets = pgTable(
     branch: text("branch"),
     worktreePath: text("worktree_path"),
     prUrl: text("pr_url"),
+    externalRef: jsonb("external_ref").$type<ExternalRef>(),
     createdAt: createdAt(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
