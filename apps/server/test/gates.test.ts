@@ -15,6 +15,14 @@ describe("diffGuard", () => {
     expect(diffGuard({ ...base, changes: [{ status: "M", path: "packages/core/x.ts" }] }).ok).toBe(false);
   });
 
+  it("allows the root lockfile only alongside an in-scope package manifest", () => {
+    const scope = { ...base, fileScope: ["plugins/jira/"] };
+    const withManifest = diffGuard({ ...scope, changes: [{ status: "A", path: "plugins/jira/package.json" }, { status: "M", path: "pnpm-lock.yaml" }] });
+    expect(withManifest).toEqual({ ok: true, problems: [] });
+    expect(diffGuard({ ...scope, changes: [{ status: "A", path: "plugins/jira/src/a.ts" }, { status: "M", path: "pnpm-lock.yaml" }] }).ok).toBe(false);
+    expect(diffGuard({ ...scope, changes: [{ status: "M", path: "packages/core/package.json" }, { status: "M", path: "pnpm-lock.yaml" }] }).ok).toBe(false);
+  });
+
   it("rejects removed assertions and added skips in existing tests", () => {
     const existingTestDiff = ["--- a/x.test.ts", "+++ b/x.test.ts", "-  expect(total).toBe(3);", "+  it.skip('works', () => {"].join("\n");
     const r = diffGuard({ ...base, changes: [{ status: "M", path: "apps/web/src/x.test.ts" }], existingTestDiff });

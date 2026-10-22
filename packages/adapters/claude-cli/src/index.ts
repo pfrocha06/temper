@@ -17,7 +17,7 @@ export type ClaudeCliOptions = {
  * `--strict-mcp-config`, this keeps the user's own skills, plugins, hooks, CLAUDE.md,
  * memory and MCP servers out of agent runs while reusing the user's login.
  */
-export function runSettings(req: Pick<RunRequest, "denyDirs">): Record<string, unknown> {
+export function runSettings(req: Pick<RunRequest, "denyDirs" | "hostLoopback">): Record<string, unknown> {
   // In permission rules a single leading `/` is relative to the settings source; `//` is absolute.
   const abs = (d: string) => (d.startsWith("/") ? `/${d}` : d);
   const deny = (req.denyDirs ?? []).flatMap((d) => ["Read", "Edit", "Write", "Grep", "Glob"].map((t) => `${t}(${abs(d)}/**)`));
@@ -30,7 +30,8 @@ export function runSettings(req: Pick<RunRequest, "denyDirs">): Record<string, u
           allowUnsandboxedCommands: false,
           filesystem: { denyRead: req.denyDirs },
           // Tests commonly start stub servers on 127.0.0.1; outbound network stays blocked.
-          network: { allowLocalBinding: true },
+          // On Linux the sandbox's loopback is not the host's: the host's is reached through the proxy.
+          network: { allowLocalBinding: true, ...(req.hostLoopback ? { allowedDomains: ["127.0.0.1"] } : {}) },
         }
       : undefined,
   };

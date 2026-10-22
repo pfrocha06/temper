@@ -26,16 +26,22 @@ function inScope(path: string, scope: string[]): boolean {
   });
 }
 
+const LOCKFILES = new Set(["pnpm-lock.yaml", "package-lock.json", "yarn.lock"]);
+const isManifest = (p: string) => p === "package.json" || p.endsWith("/package.json");
+
 /**
  * Builders may add tests but may not weaken existing ones. Refactors may not touch tests at all.
- * Changes outside the ticket's file scope are rejected. Verification tickets are exempt from the
- * test rules (they are Verifier-owned and board-approved).
+ * Changes outside the ticket's file scope are rejected, except the root lockfile when an in-scope
+ * package manifest changed (adding a workspace package always rewrites it). Verification tickets
+ * are exempt from the test rules (they are Verifier-owned and board-approved).
  */
 export function diffGuard(input: GuardInput): GuardResult {
   const problems: string[] = [];
   const tests = input.changes.filter((c) => isTestFile(c.path));
+  const manifestChanged = input.changes.some((c) => isManifest(c.path) && inScope(c.path, input.fileScope));
 
   for (const c of input.changes) {
+    if (LOCKFILES.has(c.path) && manifestChanged) continue;
     if (!inScope(c.path, input.fileScope) && !(isTestFile(c.path) && c.status === "A")) {
       problems.push(`${c.path} is outside the ticket's file scope`);
     }

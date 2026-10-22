@@ -38,6 +38,13 @@ describe("buildArgs", () => {
     expect(settings.permissions.deny).toContain("Read(//holdouts/**)");
     expect(settings.sandbox.allowUnsandboxedCommands).toBe(false);
     expect(settings.sandbox.network.allowLocalBinding).toBe(true);
+    expect(settings.sandbox.network.allowedDomains).toBeUndefined();
+  });
+
+  it("lets a run reach the host's loopback through the sandbox proxy only when asked", () => {
+    const args = buildArgs({ cwd: "/w", prompt: "hi", allowedTools: [], disallowedTools: [], denyDirs: ["/secrets"], hostLoopback: true });
+    const settings = JSON.parse(args[args.indexOf("--settings") + 1]!);
+    expect(settings.sandbox.network.allowedDomains).toEqual(["127.0.0.1"]);
   });
 });
 
