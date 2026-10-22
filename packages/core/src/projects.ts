@@ -14,6 +14,7 @@ export async function createProject(
     remoteUrl?: string;
     holdoutsPath?: string;
     defaultBranch?: string;
+    setupCommand?: string;
     testCommand?: string;
     appCommand?: string;
     appHealthPath?: string;

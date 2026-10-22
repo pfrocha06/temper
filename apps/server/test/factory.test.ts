@@ -12,6 +12,7 @@ import {
   loadWorkflows,
   openDb,
   pendingApprovals,
+  recentAudit,
   seedAgents,
   ticketDispatches,
   type Db,
@@ -68,6 +69,7 @@ describe("feature ticket end to end", () => {
       name: "demo",
       repoPath: repo,
       holdoutsPath: holdouts,
+      setupCommand: "true",
       testCommand: "test -f hello.txt",
       holdoutsCommand: "sh check.sh",
     });
@@ -93,5 +95,6 @@ describe("feature ticket end to end", () => {
     const names = (await latestArtifacts(db, ticket.id)).map((a) => a.name).sort();
     expect(names).toEqual(expect.arrayContaining(["changes.md", "feedback.md", "gates.md", "review.md", "verification.md"]));
     expect((await pendingApprovals(db)).map((a) => a.kind)).toEqual(["escalation"]);
+    expect((await recentAudit(db, 500)).filter((e) => e.kind === "worktree.setup")).toHaveLength(1);
   }, 60_000);
 });

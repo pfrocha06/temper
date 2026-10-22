@@ -1,4 +1,6 @@
 import { EventEmitter } from "node:events";
+import { existsSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { and, desc, eq } from "drizzle-orm";
 import {
   audit,
@@ -45,6 +47,7 @@ import { bootApp } from "./app-runner.ts";
 import type { Config } from "./config.ts";
 import { diffGuard } from "./gates/diff-guard.ts";
 import { builderFeedback as holdoutFeedback, parseHoldoutResults } from "./gates/holdout-results.ts";
+import { runShell } from "./exec.ts";
 import { runChecks } from "./gates/run.ts";
 import {
   changedBetween,
@@ -70,6 +73,19 @@ type Active = { dispatchId: string; ticketId: string; role: Role | "server"; age
 type StageOutcome = { verdict: Verdict; summary: string; artifact?: { name: string; content: string }; feedback?: string; waiting?: boolean };
 
 const RATE_LIMIT_PAUSE_MS = 15 * 60_000;
+
+/**
+ * Environment for every agent process. Agents commit locally but cannot reach the user's
+ * signing keys from the sandbox, so signing is disabled for their commits only (via git's
+ * GIT_CONFIG_* variables; no config file changes). Merges happen on the git host.
+ */
+export const AGENT_ENV: Record<string, string> = {
+  GIT_CONFIG_COUNT: "2",
+  GIT_CONFIG_KEY_0: "commit.gpgsign",
+  GIT_CONFIG_VALUE_0: "false",
+  GIT_CONFIG_KEY_1: "tag.gpgsign",
+  GIT_CONFIG_VALUE_1: "false",
+};
 const MAX_GATE_CONCURRENCY = 2;
 
 /** Base ref for worktrees and diffs: the remote branch when there is a remote. */
@@ -218,6 +234,20 @@ export class Factory extends EventEmitter {
     return updateTicket(this.db, t.id, { worktreePath: path, branch });
   }
 
+  /**
+   * Runs the project's setup command once per worktree, on the server and outside any agent
+   * sandbox (agents have no network). A marker next to the worktree records success.
+   */
+  private async ensureSetup(ticket: Ticket, project: Project): Promise<void> {
+    if (!project.setupCommand || !ticket.worktreePath) return;
+    const marker = `${ticket.worktreePath}.setup-ok`;
+    if (existsSync(marker)) return;
+    const r = await runShell(project.setupCommand, { cwd: ticket.worktreePath, timeoutMs: 20 * 60_000 });
+    if (r.code !== 0) throw new Error(`setup command failed (exit ${r.code}):\n${(r.stdout + r.stderr).slice(-2000)}`);
+    writeFileSync(marker, new Date().toISOString());
+    await audit(this.db, { actor: "system", kind: "worktree.setup", subject: ticket.id });
+  }
+
   private async project(t: Ticket): Promise<Project> {
     const p = await getProject(this.db, t.projectId);
     if (!p) throw new Error(`project ${t.projectId} not found`);
@@ -247,6 +277,7 @@ export class Factory extends EventEmitter {
     this.emit("change");
     try {
       if (ticket.stage !== stage.id) ticket = await updateTicket(this.db, ticket.id, { stage: stage.id });
+      await this.ensureSetup(ticket, await this.project(ticket));
       const outcome =
         stage.kind === "agent"
           ? await this.runAgentStage(ticket, stage, agent!, dispatch.id, controller.signal)
@@ -303,8 +334,10 @@ export class Factory extends EventEmitter {
       disallowed.push(`Edit(${worktree}/**)`, `Write(${worktree}/**)`);
       holdoutsBefore = await headSha(cwd);
       if (project.appCommand) app = await bootApp(project.appCommand, worktree, project.appHealthPath).catch(() => undefined);
-    } else if (project.holdoutsPath) {
-      denyDirs.push(project.holdoutsPath);
+    } else {
+      if (project.holdoutsPath) denyDirs.push(project.holdoutsPath);
+      // A worktree's git metadata lives in the main repository; commits must be able to write it.
+      if (ticket.worktreePath && !stage.readOnly) addDirs.push(join(project.repoPath, ".git"));
     }
     if (stage.role === "reviewer" && ticket.worktreePath) {
       const mb = await mergeBase(worktree, baseRef(project));
@@ -336,6 +369,7 @@ export class Factory extends EventEmitter {
           denyDirs,
           skillDirs,
           appendSystemPrompt: agent.instructions || undefined,
+          env: AGENT_ENV,
           signal,
         },
         (e) => void recordDispatchEvent(this.db, dispatchId, e),

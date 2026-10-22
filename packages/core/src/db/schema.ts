@@ -20,6 +20,8 @@ export const projects = pgTable("projects", {
   remoteUrl: text("remote_url"),
   holdoutsPath: text("holdouts_path"),
   defaultBranch: text("default_branch").notNull().default("main"),
+  /** Prepares a fresh worktree (e.g. installs dependencies). Runs on the server, outside agent sandboxes. */
+  setupCommand: text("setup_command"),
   /** Runs the project's own tests in a worktree. */
   testCommand: text("test_command").notNull().default("pnpm test"),
   /** Boots the app from a worktree; receives PORT. Empty when there is no app to run. */
