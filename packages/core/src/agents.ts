@@ -20,10 +20,10 @@ const write: AgentPermissions = {
 const readOnly: AgentPermissions = { allowedTools: readOnlyTools, disallowedTools: [...neverTools, "Edit", "Write"] };
 
 export const DEFAULT_AGENTS: AgentDraft[] = [
-  { id: "planner", role: "planner", name: "Planner", adapter: "claude-cli", model: "opus", skills: ["grilling", "to-spec", "to-tickets"], permissions: readOnly, maxConcurrency: 1, runsPerHour: 6, instructions: "" },
-  { id: "builder", role: "builder", name: "Builder", adapter: "claude-cli", model: "sonnet", skills: ["tdd", "codebase-design"], permissions: write, maxConcurrency: 2, runsPerHour: 12, instructions: "" },
-  { id: "verifier", role: "verifier", name: "Verifier", adapter: "claude-cli", model: "opus", skills: ["playwright-cli"], permissions: write, maxConcurrency: 1, runsPerHour: 12, instructions: "" },
-  { id: "reviewer", role: "reviewer", name: "Reviewer", adapter: "claude-cli", model: "opus", skills: ["code-review"], permissions: readOnly, maxConcurrency: 1, runsPerHour: 12, instructions: "" },
+  { id: "planner", role: "planner", name: "Planner", adapter: "claude-cli", model: "opus", skills: ["grilling", "to-spec", "to-tickets", "domain-modeling", "research", "architect", "blast-radius"], permissions: readOnly, maxConcurrency: 1, runsPerHour: 6, instructions: "" },
+  { id: "builder", role: "builder", name: "Builder", adapter: "claude-cli", model: "sonnet", skills: ["tdd", "codebase-design", "diagnosing-bugs", "typescript-best-practices", "principle-prove-it-works", "principle-fix-root-causes", "principle-subtract-before-you-add", "frontend-design", "shadcn", "react-best-practices", "web-design-guidelines", "composition-patterns"], permissions: write, maxConcurrency: 2, runsPerHour: 12, instructions: "" },
+  { id: "verifier", role: "verifier", name: "Verifier", adapter: "claude-cli", model: "opus", skills: ["create-verification-skill", "maintain-verification-skill", "playwright-cli", "webapp-testing", "principle-test-behavior-not-implementation", "benchmark-checklist"], permissions: write, maxConcurrency: 1, runsPerHour: 12, instructions: "" },
+  { id: "reviewer", role: "reviewer", name: "Reviewer", adapter: "claude-cli", model: "opus", skills: ["code-review", "interrogate", "blast-radius", "principle-explain-the-number"], permissions: readOnly, maxConcurrency: 1, runsPerHour: 12, instructions: "" },
 ];
 
 /** Latest version of each agent. */

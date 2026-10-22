@@ -1,0 +1,68 @@
+{
+  "sources": [
+    {
+      "repo": "mattpocock/skills",
+      "commit": "5beb35b040e3de97e54fa9e386d7e42d15c295c2",
+      "license": "MIT",
+      "skills": [
+        "skills/productivity/grilling",
+        "skills/engineering/to-spec",
+        "skills/engineering/to-tickets",
+        "skills/engineering/tdd",
+        "skills/engineering/code-review",
+        "skills/engineering/codebase-design",
+        "skills/engineering/diagnosing-bugs",
+        "skills/engineering/domain-modeling",
+        "skills/engineering/research",
+        "skills/engineering/retro",
+        "skills/productivity/writing-for-agents"
+      ]
+    },
+    {
+      "repo": "backnotprop/pstack",
+      "commit": "e44668c2aad92eacf4e84df47984121fefb11b82",
+      "license": "MIT",
+      "skills": [
+        "skills/blast-radius",
+        "skills/interrogate",
+        "skills/architect",
+        "skills/create-verification-skill",
+        "skills/maintain-verification-skill",
+        "skills/benchmark-checklist",
+        "skills/typescript-best-practices",
+        "skills/show-me-your-work",
+        "skills/reflect",
+        "skills/correct",
+        "skills/principle-prove-it-works",
+        "skills/principle-fix-root-causes",
+        "skills/principle-test-behavior-not-implementation",
+        "skills/principle-explain-the-number",
+        "skills/principle-subtract-before-you-add"
+      ]
+    },
+    {
+      "repo": "anthropics/skills",
+      "commit": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "license": "Apache-2.0",
+      "skills": ["skills/frontend-design", "skills/webapp-testing"]
+    },
+    {
+      "repo": "shadcn-ui/ui",
+      "commit": "25af02b1b467fcd53b63e0c6d6d324c57c16ef18",
+      "license": "MIT",
+      "skills": ["skills/shadcn"]
+    },
+    {
+      "repo": "vercel-labs/agent-skills",
+      "commit": "063bee94c3f4df8453406c830b0a7df0f2860278",
+      "license": "MIT",
+      "skills": ["skills/react-best-practices", "skills/web-design-guidelines", "skills/composition-patterns"]
+    },
+    {
+      "repo": "microsoft/playwright-cli",
+      "commit": "b1a5903c5b633b8c9f843ad7b629c2a78437040c",
+      "license": "Apache-2.0",
+      "skills": ["skills/playwright-cli"]
+    }
+  ]
+}
