@@ -5,7 +5,7 @@ import { audit, ensureDefaultEnvironment, loadWorkflows, openDb, seedAgents, typ
 import { createApi } from "./api.ts";
 import { Auth, loadBoardToken } from "./auth.ts";
 import { useGithubUser } from "@temper/plugin-github";
-import { loadConfig } from "./config.ts";
+import { loadConfig, protectedDirs } from "./config.ts";
 import { loadProfile } from "./profile.ts";
 import { Factory } from "./factory.ts";
 
@@ -18,7 +18,7 @@ await ensureDefaultEnvironment(db, dirname(config.appRoot));
 
 const adapters = new Map<string, AgentAdapter>([["claude-cli", createClaudeCliAdapter({
   bin: config.claudeBin,
-  alwaysDenyDirs: [config.secretsDir, join(config.home, "instances"), join(config.home, "backups")],
+  alwaysDenyDirs: protectedDirs(config),
 })]]);
 const workflows = loadWorkflows(join(config.appRoot, "workflows"));
 const auth = new Auth(loadBoardToken(join(config.secretsDir, "board-token"), process.env.TEMPER_BOARD_TOKEN), config.port);

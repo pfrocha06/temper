@@ -1,6 +1,7 @@
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { SandboxMode } from "./sandbox.ts";
 
 export type Config = {
   /** Root of all Temper state: releases, instances, worktrees. */
@@ -16,7 +17,12 @@ export type Config = {
   claudeBin: string;
   /** Board token file (mode 0600). Agents are always denied this directory. */
   secretsDir: string;
+  /** Sandbox for Builder code the server runs itself (tests, the candidate app). `off` only for development. */
+  gateSandbox: SandboxMode;
 };
+
+/** Temper's own secrets and data: no agent run and no sandboxed gate command may read them. */
+export const protectedDirs = (c: Config) => [c.secretsDir, join(c.home, "instances"), join(c.home, "backups")];
 
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -33,5 +39,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     heartbeatMs: Number(env.TEMPER_HEARTBEAT_MS ?? 15_000),
     claudeBin: env.TEMPER_CLAUDE_BIN ?? "claude",
     secretsDir: join(home, "secrets"),
+    gateSandbox: env.TEMPER_GATE_SANDBOX === "off" ? "off" : "srt",
   };
 }

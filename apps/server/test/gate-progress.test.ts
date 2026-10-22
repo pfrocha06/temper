@@ -75,6 +75,7 @@ describe("runChecks progress events", () => {
     project: { testCommand: "pnpm test" } as Project,
     ticket: {} as Ticket,
     worktree: "/nowhere",
+    sandbox: { mode: "off" as const, denyRead: [] },
     outputIntervalMs: 5,
   };
 

@@ -15,7 +15,9 @@ pnpm check                 # agnostic check + typecheck + tests
 pnpm dev                   # dev instance: server on :4610 + web on :5173 (separate data from the service)
 ```
 
-Requires Node ≥ 22, pnpm, git, the `gh` CLI and the `claude` CLI (logged in).
+Requires Node ≥ 22, pnpm, git, the `gh` CLI and the `claude` CLI (logged in). On Linux the gate
+sandbox also needs `bubblewrap`, `socat` and `ripgrep`. `TEMPER_GATE_SANDBOX=off` runs gate commands
+unsandboxed, for development on platforms the sandbox does not support only.
 
 ## Run it as a service
 
@@ -30,7 +32,8 @@ JSON
 node apps/server/src/cli.ts deploy --ref main
 node apps/server/src/cli.ts open
 
-# 3. Prove agents cannot read your holdouts before trusting the factory
+# 3. Prove agents, and the gate commands that run their code, cannot read your holdouts
+#    before trusting the factory
 node apps/server/src/cli.ts probe-isolation --holdouts <holdouts-checkout>
 
 # 4. Register a project (Temper itself is the first one)

@@ -131,6 +131,12 @@ PRs with eval evidence; the human approves. Human-authored skills go live direct
 Environment values are never displayed. The audit log is redacted before write. A secret
 scan is a hard gate before any push.
 
+The server itself runs Builder code: the test command and the candidate app. Both run in the
+same sandbox as agent runs (Anthropic's sandbox runtime): no reads of holdouts or Temper's data,
+writes only to the worktree and a private temp dir, no outbound network, no server environment.
+A deterministic probe proves this before the first gate runs; while it fails, those stages go
+to the board.
+
 ## Stack
 
 TypeScript pnpm monorepo. Node server on Hono; Postgres embedded in-process (PGlite) via

@@ -13,6 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@anthropic-ai/sandbox-runtime": "0.0.78",
     "@hono/node-server": "^2.1.5",
     "@temper/adapter-claude-cli": "workspace:*",
     "@temper/core": "workspace:*",
