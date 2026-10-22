@@ -19,6 +19,7 @@ export async function createProject(
     appCommand?: string;
     appHealthPath?: string;
     holdoutsCommand?: string;
+    holdoutsSetupCommand?: string;
   },
 ): Promise<Project> {
   const [row] = await db.insert(projects).values({ id: newId("prj"), ...input }).returning();

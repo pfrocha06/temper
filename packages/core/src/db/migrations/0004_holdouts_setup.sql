@@ -1,0 +1,1 @@
+ALTER TABLE "projects" ADD COLUMN "holdouts_setup_command" text;

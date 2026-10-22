@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
-import { existsSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { and, desc, eq } from "drizzle-orm";
 import {
@@ -234,6 +235,28 @@ export class Factory extends EventEmitter {
     return updateTicket(this.db, t.id, { worktreePath: path, branch });
   }
 
+  /** Installs the holdouts' own dependencies whenever their manifests change. */
+  private async ensureHoldoutsSetup(project: Project): Promise<void> {
+    if (!project.holdoutsSetupCommand || !project.holdoutsPath) return;
+    const manifests = ["package.json", "pnpm-lock.yaml", "package-lock.json"]
+      .map((f) => join(project.holdoutsPath!, f))
+      .filter((f) => existsSync(f))
+      .map((f) => readFileSync(f, "utf8"))
+      .join("\0");
+    const hash = createHash("sha256").update(project.holdoutsSetupCommand + manifests).digest("hex").slice(0, 16);
+    const marker = join(project.holdoutsPath, ".git", `temper-setup-${hash}`);
+    if (existsSync(marker)) return;
+    const r = await runShell(project.holdoutsSetupCommand, { cwd: project.holdoutsPath, timeoutMs: 20 * 60_000 });
+    if (r.code !== 0) throw new Error(`holdouts setup failed (exit ${r.code}):\n${(r.stdout + r.stderr).slice(-2000)}`);
+    writeFileSync(marker, new Date().toISOString());
+    await audit(this.db, { actor: "system", kind: "holdouts.setup", subject: project.id });
+  }
+
+  /** Done tickets of a project: their holdouts are regression checks for everything after. */
+  private async regressionTickets(projectId: string): Promise<string[]> {
+    return (await listTickets(this.db, projectId)).filter((t) => t.status === "done").map((t) => t.id);
+  }
+
   /**
    * Runs the project's setup command once per worktree, on the server and outside any agent
    * sandbox (agents have no network). A marker next to the worktree records success.
@@ -330,6 +353,7 @@ export class Factory extends EventEmitter {
         return { verdict: "BLOCKED", summary: "No holdouts repository is configured for this project." };
       }
       cwd = project.holdoutsPath;
+      await this.ensureHoldoutsSetup(project);
       addDirs.push(worktree);
       disallowed.push(`Edit(${worktree}/**)`, `Write(${worktree}/**)`);
       holdoutsBefore = await headSha(cwd);
@@ -369,7 +393,16 @@ export class Factory extends EventEmitter {
           denyDirs,
           skillDirs,
           appendSystemPrompt: agent.instructions || undefined,
-          env: AGENT_ENV,
+          env:
+            stage.role === "verifier"
+              ? {
+                  ...AGENT_ENV,
+                  TEMPER_APP_URL: app?.url ?? "",
+                  TEMPER_CANDIDATE_PATH: worktree,
+                  TEMPER_TICKET_ID: ticket.id,
+                  TEMPER_REGRESSION_TICKETS: (await this.regressionTickets(ticket.projectId)).join(","),
+                }
+              : AGENT_ENV,
           signal,
         },
         (e) => void recordDispatchEvent(this.db, dispatchId, e),
@@ -425,7 +458,14 @@ export class Factory extends EventEmitter {
     if (stage.checks.includes("open_pr") || stage.checks.includes("await_merge")) {
       return this.runPrGate(ticket, stage, project, worktree);
     }
-    const outcome = await runChecks(stage.checks, { project: { ...project, defaultBranch: baseRef(project) }, ticket, worktree, signal });
+    if (stage.checks.includes("holdouts")) await this.ensureHoldoutsSetup(project);
+    const outcome = await runChecks(stage.checks, {
+      project: { ...project, defaultBranch: baseRef(project) },
+      ticket,
+      worktree,
+      regressionTickets: await this.regressionTickets(project.id),
+      signal,
+    });
     for (const r of outcome.results) {
       await recordDispatchEvent(this.db, dispatchId, { kind: "text", text: `${r.check}: ${r.ok ? "PASS" : "FAIL"}` });
       if (r.check === "holdouts" && !r.ok) await recordSignal(this.db, "holdout_failure", ticket.id);

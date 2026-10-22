@@ -29,6 +29,13 @@
       "when": 1792674848759,
       "tag": "0003_project_setup",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792678589347,
+      "tag": "0004_holdouts_setup",
+      "breakpoints": true
     }
   ]
 }

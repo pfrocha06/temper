@@ -49,6 +49,7 @@ export function buildPrompt(input: PromptInput): string {
     }
     if (input.worktreePath) where.push(`The candidate code is at ${input.worktreePath}. Do not modify it.`);
     if (input.appUrl) where.push(`The candidate app is running at ${input.appUrl}.`);
+    where.push("Run the suite with `node run.mjs` (TEMPER_APP_URL, TEMPER_TICKET_ID and TEMPER_REGRESSION_TICKETS are set). For UI behaviour, use `lib/browser.mjs` (Playwright, headless Chromium).");
     where.push("Report each criterion on its own line as `AC-<id>: PASS` or `AC-<id>: FAIL <one-line reason>`.");
     parts.push(`## Environment\n${where.join("\n")}`);
   }

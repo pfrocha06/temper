@@ -27,6 +27,8 @@ export const projects = pgTable("projects", {
   /** Boots the app from a worktree; receives PORT. Empty when there is no app to run. */
   appCommand: text("app_command"),
   appHealthPath: text("app_health_path").notNull().default("/"),
+  /** Prepares the holdouts checkout (e.g. installs Playwright). Re-runs when its manifests change. */
+  holdoutsSetupCommand: text("holdouts_setup_command"),
   /** Runs holdouts from the holdouts checkout; receives TEMPER_APP_URL. Prints `AC-<id>: PASS|FAIL <msg>` lines. */
   holdoutsCommand: text("holdouts_command"),
   createdAt: createdAt(),

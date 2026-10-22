@@ -43,6 +43,7 @@ const NewProject = z.object({
   appCommand: z.string().optional(),
   appHealthPath: z.string().optional(),
   holdoutsCommand: z.string().optional(),
+  holdoutsSetupCommand: z.string().optional(),
 });
 
 const NewTicket = z.object({
