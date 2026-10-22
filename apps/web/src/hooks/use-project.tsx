@@ -1,9 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { createContext, use, useState, type ReactNode } from "react";
+import { DEFAULT_ENVIRONMENT } from "@/lib/constants";
 import { projectsQuery } from "@/lib/queries";
+import { useEnvironment } from "./use-environment";
 import type { Project } from "@/lib/types";
 
 type ProjectContext = {
+  /** Projects in the selected environment. */
   projects: Project[];
   /** The selected project, or the only one; undefined when there are none. */
   project: Project | undefined;
@@ -22,8 +25,16 @@ function readStored(): string | null {
   }
 }
 
+/** Projects that belong to an environment; ones created before environments existed belong to the default. */
+export function inEnvironment(projects: Project[], environmentId: string | undefined): Project[] {
+  if (!environmentId) return projects;
+  return projects.filter((p) => (p.environmentId ?? DEFAULT_ENVIRONMENT) === environmentId);
+}
+
 export function ProjectProvider({ children }: { children: ReactNode }) {
-  const { data: projects = [], isLoading } = useQuery(projectsQuery);
+  const { data: all = [], isLoading } = useQuery(projectsQuery);
+  const { environment } = useEnvironment();
+  const projects = inEnvironment(all, environment?.id);
   const [selectedId, setSelectedId] = useState<string | null>(readStored);
   const project = projects.find((p) => p.id === selectedId) ?? projects[0];
 

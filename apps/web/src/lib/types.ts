@@ -3,9 +3,14 @@ import type {
   Agent as AgentRow,
   Approval as ApprovalRow,
   Artifact as ArtifactRow,
+  Chat as ChatRow,
+  ChatMessage as ChatMessageRow,
   Contribution,
   Dispatch as DispatchRow,
   DispatchEvent as DispatchEventRow,
+  Environment as EnvironmentRow,
+  KnowledgeEntry as KnowledgeEntryRow,
+  KnowledgeKind,
   Project as ProjectRow,
   Regime,
   RegimePolicy,
@@ -77,6 +82,7 @@ export type AgentEdit = {
   name: string;
   model: string | null;
   skills: string[];
+  mcpServers: string[];
   permissions: { allowedTools: string[]; disallowedTools: string[] };
   maxConcurrency: number;
   runsPerHour: number;
@@ -93,4 +99,37 @@ export type NewTicketInput = {
   ready: boolean;
 };
 
-export type { Contribution, Regime, RegimePolicy, Role, TicketStatus, TicketType };
+export type Environment = Json<EnvironmentRow>;
+export type KnowledgeEntry = Json<KnowledgeEntryRow>;
+/** One time a run loaded an entry: the retrieval trail. */
+export type KnowledgeRead = { id: number; entryId: string; dispatchId: string | null; via: string; at: string };
+export type KnowledgeDetail = KnowledgeEntry & { reads: KnowledgeRead[] };
+export type KnowledgeInput = {
+  environmentId: string;
+  projectId?: string | null;
+  area?: string | null;
+  kind: KnowledgeKind;
+  title: string;
+  abstract: string;
+  body?: string;
+  tags?: string[];
+};
+export type KnowledgePatch = Partial<Omit<KnowledgeInput, "environmentId">> & { pinned?: 0 | 1; status?: "active" | "archived" };
+
+export type Chat = Json<ChatRow>;
+export type ChatMessage = Json<ChatMessageRow>;
+export type ChatAction = ChatMessage["actions"][number];
+export type ChatDetail = { chat: Chat; messages: ChatMessage[]; thinking: boolean };
+/** The `chat` SSE event: a turn started, one of the Chief's run events, or the turn finished. */
+export type ChatStreamMessage = { chatId: string; kind: "started" | "event" | "finished"; event?: RunEvent };
+
+export type ToolStatus = "ok" | "missing" | "error";
+/** GET /api/tools. Secret values never leave the server: MCP servers list env key names only. */
+export type ToolsInventory = {
+  adapters: Array<{ id: string; status: ToolStatus; version?: string; isolated: boolean; note: string }>;
+  clis: Array<{ name: string; purpose: string; status: ToolStatus; version?: string }>;
+  mcpServers: Array<{ name: string; builtIn: boolean; description: string; command: string; envKeys: string[]; roles: string[] }>;
+  connectors: Array<{ id: string; status: ToolStatus; detail: string }>;
+};
+
+export type { Contribution, KnowledgeKind, Regime, RegimePolicy, Role, RunEvent, TicketStatus, TicketType };

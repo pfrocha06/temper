@@ -1,5 +1,5 @@
 import type { Dispatch, Ticket } from "./types";
-import { stagesFor, type StageActor, type StageDef } from "./workflows";
+import { isDigest, stagesFor, type StageActor, type StageDef } from "./workflows";
 
 /**
  * - `pending`: not reached yet (or an earlier result made stale by a loop back).
@@ -49,6 +49,7 @@ const order = (a: Dispatch, b: Dispatch) => a.createdAt.localeCompare(b.createdA
 export function derivePipeline(ticket: PipelineTicket, dispatches: Dispatch[]): PipelineNode[] {
   const byStage = new Map<string, Dispatch[]>();
   for (const d of dispatches.toSorted(order)) {
+    if (isDigest(d)) continue;
     const list = byStage.get(d.stage) ?? [];
     list.push(d);
     byStage.set(d.stage, list);

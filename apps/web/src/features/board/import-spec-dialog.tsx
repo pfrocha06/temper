@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useImportSpec } from "@/lib/queries";
 
 /**
- * The Planner turns a spec into tickets. That is a full agent run, so the
+ * The Chief of Staff turns a spec into tickets. That is a full agent run, so the
  * request can take minutes; the dialog can be closed and the result arrives as a toast.
  */
 export function ImportSpecDialog({ projectId, open, onOpenChange }: { projectId: string; open: boolean; onOpenChange: (o: boolean) => void }) {
@@ -36,7 +36,7 @@ export function ImportSpecDialog({ projectId, open, onOpenChange }: { projectId:
     importSpec
       .mutateAsync({ projectId, title: title.trim(), markdown, autoStart })
       .then((tickets) => {
-        toast.success(`Planner wrote ${tickets.length} ticket${tickets.length === 1 ? "" : "s"} from “${title.trim()}”`);
+        toast.success(`Chief of Staff wrote ${tickets.length} ticket${tickets.length === 1 ? "" : "s"} from “${title.trim()}”`);
         setTitle("");
         setMarkdown("");
         onOpenChange(false);
@@ -54,12 +54,12 @@ export function ImportSpecDialog({ projectId, open, onOpenChange }: { projectId:
         <form onSubmit={submit} className="flex flex-col gap-5">
           <DialogHeader>
             <DialogTitle>Import spec</DialogTitle>
-            <DialogDescription>The Planner reads the spec and splits it into tickets on the board.</DialogDescription>
+            <DialogDescription>The Chief of Staff reads the spec and splits it into tickets on the board.</DialogDescription>
           </DialogHeader>
           {pending ? (
             <Alert>
               <Spinner />
-              <AlertTitle>Planner at work for {elapsed}</AlertTitle>
+              <AlertTitle>Chief of Staff at work for {elapsed}</AlertTitle>
               <AlertDescription>This usually takes a few minutes. You can close this dialog; a notification appears when the tickets are ready.</AlertDescription>
             </Alert>
           ) : null}

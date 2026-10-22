@@ -23,6 +23,16 @@ const d = (stage: string, agentId: string, over: Partial<Dispatch> = {}): Dispat
 const states = (nodes: ReturnType<typeof derivePipeline>) => nodes.map((n) => `${n.stage}:${n.state}`);
 
 describe("derivePipeline", () => {
+  it("leaves the Chief's post-ticket digest out of the pipeline", () => {
+    const nodes = derivePipeline({ type: "investigation", status: "done", stage: null }, [
+      d("investigate", "chief"),
+      d("review", "reviewer"),
+      d("digest", "chief", { status: "running", verdict: null }),
+    ]);
+    expect(states(nodes)).toEqual(["investigate:pass", "review:pass"]);
+    expect(nodes[0]!.actor).toBe("chief");
+  });
+
   it("lays out the workflow's stages, all pending before any dispatch", () => {
     const nodes = derivePipeline({ type: "feature", status: "backlog", stage: null }, []);
     expect(states(nodes)).toEqual(["build:pending", "verify:pending", "gates:pending", "review:pending", "pr:pending"]);

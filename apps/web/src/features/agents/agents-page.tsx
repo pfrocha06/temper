@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRightIcon, ShieldIcon } from "lucide-react";
+import { ChevronRightIcon, PlugZapIcon, ShieldIcon } from "lucide-react";
 import { useMemo } from "react";
 import { Link } from "react-router";
 import { cn } from "cn";
@@ -14,7 +14,7 @@ import { agentsQuery, approvalsQuery, dispatchesQuery, statusQuery } from "@/lib
 import type { Agent } from "@/lib/types";
 import { AgentEditDialog } from "./agent-edit-dialog";
 
-const ROLE_ORDER = ["planner", "builder", "verifier", "reviewer"];
+const ROLE_ORDER = ["chief", "builder", "verifier", "reviewer"];
 const VERDICT_BG: Record<string, string> = { PASS: "bg-pass", FAIL: "bg-fail", BLOCKED: "bg-blocked", none: "bg-muted-foreground/40" };
 
 export function AgentsPage() {
@@ -124,6 +124,18 @@ function AgentCard({ agent, stats, active, awaitingApproval }: { agent: Agent; s
             <Badge variant="outline" className="font-mono">
               {agent.adapter}
             </Badge>
+          </p>
+          <p className="mt-0.5 flex flex-wrap items-center gap-1" aria-label="MCP servers">
+            <PlugZapIcon aria-hidden className="size-3.5 text-muted-foreground" />
+            {agent.mcpServers.length === 0 ? (
+              <span className="text-xs text-muted-foreground">No MCP servers</span>
+            ) : (
+              agent.mcpServers.map((s) => (
+                <Badge key={s} variant="outline" className="font-mono">
+                  {s}
+                </Badge>
+              ))
+            )}
           </p>
         </div>
         <AgentEditDialog agent={agent} />

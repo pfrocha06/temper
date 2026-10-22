@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { PencilIcon, ShieldAlertIcon } from "lucide-react";
 import { useState, type FormEvent } from "react";
+import { cn } from "cn";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -10,9 +11,12 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { Toggle } from "@/components/ui/toggle";
-import { skillsQuery, useSaveAgent } from "@/lib/queries";
+import { skillsQuery, toolsQuery, useSaveAgent } from "@/lib/queries";
 import type { Agent } from "@/lib/types";
 import { toAgentEdit, toFormValues, type AgentFormValues, type FormErrors } from "./agent-form";
+
+/** Assigned skills and servers must read as selected at a glance, in both themes. */
+const PRESSED = "data-[state=on]:border-primary/60 data-[state=on]:bg-primary/15 data-[state=on]:text-foreground";
 
 export function AgentEditDialog({ agent }: { agent: Agent }) {
   const [open, setOpen] = useState(false);
@@ -34,6 +38,7 @@ export function AgentEditDialog({ agent }: { agent: Agent }) {
 function AgentForm({ agent, onDone }: { agent: Agent; onDone: () => void }) {
   const save = useSaveAgent();
   const skills = useQuery(skillsQuery);
+  const tools = useQuery(toolsQuery);
   const [values, setValues] = useState<AgentFormValues>(() => toFormValues(agent));
   const [errors, setErrors] = useState<FormErrors>({});
   const [serverError, setServerError] = useState<string | null>(null);
@@ -42,6 +47,12 @@ function AgentForm({ agent, onDone }: { agent: Agent; onDone: () => void }) {
   const set = <K extends keyof AgentFormValues>(key: K, value: AgentFormValues[K]) => setValues((v) => ({ ...v, [key]: value }));
   const toggleSkill = (name: string, on: boolean) =>
     setValues((v) => ({ ...v, skills: on ? [...v.skills, name] : v.skills.filter((s) => s !== name) }));
+
+  const toggleMcp = (name: string, on: boolean) =>
+    setValues((v) => ({ ...v, mcpServers: on ? [...v.mcpServers, name] : v.mcpServers.filter((s) => s !== name) }));
+  const mcpKnown = tools.data?.mcpServers.map((m) => m.name) ?? [];
+  const mcpUnknown = values.mcpServers.filter((s) => !mcpKnown.includes(s));
+  const mcpDescription = new Map(tools.data?.mcpServers.map((m) => [m.name, m.description]) ?? []);
 
   const known = skills.data?.map((s) => s.name) ?? [];
   const unknownAssigned = values.skills.filter((s) => !known.includes(s));
@@ -129,8 +140,33 @@ function AgentForm({ agent, onDone }: { agent: Agent; onDone: () => void }) {
                   variant="outline"
                   pressed={values.skills.includes(name)}
                   onPressedChange={(on) => toggleSkill(name, on)}
-                  className="h-6 px-2 text-xs"
+                  className={cn("h-6 px-2 text-xs", PRESSED)}
                   title={unknownAssigned.includes(name) ? "Not in the skill registry" : undefined}
+                >
+                  {name}
+                </Toggle>
+              ))}
+            </div>
+          )}
+        </FieldSet>
+        <FieldSet>
+          <FieldLegend variant="label">MCP servers</FieldLegend>
+          <FieldDescription>
+            Runs of this agent get only these servers. Add servers in <code className="font-mono">~/.temper/profile.json</code>; see Tools.
+          </FieldDescription>
+          {tools.isPending ? (
+            <Spinner />
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {[...mcpKnown, ...mcpUnknown].map((name) => (
+                <Toggle
+                  key={name}
+                  size="sm"
+                  variant="outline"
+                  pressed={values.mcpServers.includes(name)}
+                  onPressedChange={(on) => toggleMcp(name, on)}
+                  className={cn("h-6 px-2 font-mono text-xs", PRESSED)}
+                  title={mcpUnknown.includes(name) ? "Not in the profile: runs skip it" : mcpDescription.get(name) || undefined}
                 >
                   {name}
                 </Toggle>

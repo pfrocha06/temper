@@ -1,4 +1,4 @@
-import type { Regime, TicketStatus, TicketType } from "./types";
+import type { KnowledgeKind, Regime, Role, TicketStatus, TicketType } from "./types";
 
 // Mirrors of core's runtime constants. Kept here because core cannot be imported at runtime.
 export const TICKET_TYPES = [
@@ -12,6 +12,24 @@ export const TICKET_TYPES = [
   "skill",
   "verification",
 ] as const satisfies readonly TicketType[];
+
+/** Roles in the order the console lists them (core: agents.ts ROLES). */
+export const ROLE_ORDER = ["chief", "builder", "verifier", "reviewer"] as const satisfies readonly Role[];
+
+/** core: schema.ts KNOWLEDGE_KINDS, in display order. */
+export const KNOWLEDGE_KINDS = ["convention", "gotcha", "decision", "howto", "environment", "context"] as const satisfies readonly KnowledgeKind[];
+
+export const KNOWLEDGE_KIND_LABEL: Record<KnowledgeKind, string> = {
+  convention: "Conventions",
+  gotcha: "Gotchas",
+  decision: "Decisions",
+  howto: "How-tos",
+  environment: "Environment",
+  context: "Context",
+};
+
+/** The environment every install starts with. */
+export const DEFAULT_ENVIRONMENT = "env_default";
 
 export const TICKET_STATUSES = [
   "backlog",

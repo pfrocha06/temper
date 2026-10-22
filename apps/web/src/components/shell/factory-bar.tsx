@@ -13,6 +13,7 @@ import { REGIME_LABEL } from "@/lib/constants";
 import { clockTime, percent } from "@/lib/format";
 import { statusQuery, useSetPaused } from "@/lib/queries";
 import type { LiveState } from "@/hooks/use-live-updates";
+import { EnvironmentPicker } from "./environment-picker";
 import { ProjectPicker } from "./project-picker";
 
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -38,7 +39,10 @@ export function FactoryBar({ live }: { live: LiveState }) {
 
   return (
     <div className="flex min-h-12 flex-wrap items-center gap-x-4 gap-y-2 border-b px-4 py-2 md:px-6">
-      <ProjectPicker />
+      <div className="flex items-center gap-2">
+        <EnvironmentPicker />
+        <ProjectPicker />
+      </div>
       {down ? (
         <p role="status" className="flex items-center gap-2 text-sm text-destructive">
           <UnplugIcon aria-hidden className="size-4" />

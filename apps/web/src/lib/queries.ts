@@ -1,18 +1,26 @@
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, post, put } from "./api";
+import { api, patch, post, put } from "./api";
 import type {
   Agent,
   AgentEdit,
   Approval,
+  Chat,
+  ChatDetail,
   Dispatch,
   DispatchEvent,
+  Environment,
   FactoryStatus,
+  KnowledgeDetail,
+  KnowledgeEntry,
+  KnowledgeInput,
+  KnowledgePatch,
   NewTicketInput,
   Project,
   SkillEntry,
   TemperatureReport,
   Ticket,
   TicketDetail,
+  ToolsInventory,
 } from "./types";
 
 /** Query key roots. Live updates invalidate by root. */
@@ -27,9 +35,31 @@ export const keys = {
   agents: ["agents"] as const,
   skills: ["skills"] as const,
   temperature: ["temperature"] as const,
+  environments: ["environments"] as const,
+  knowledge: ["knowledge"] as const,
+  chats: ["chats"] as const,
+  chat: (id: string) => ["chat", id] as const,
+  tools: ["tools"] as const,
 };
 
-export type KeyRoot = "status" | "projects" | "tickets" | "ticket" | "dispatches" | "dispatch" | "approvals" | "agents" | "skills" | "temperature";
+export type KeyRoot =
+  | "status"
+  | "projects"
+  | "tickets"
+  | "ticket"
+  | "dispatches"
+  | "dispatch"
+  | "approvals"
+  | "agents"
+  | "skills"
+  | "temperature"
+  | "environments"
+  | "knowledge"
+  | "chats"
+  | "chat"
+  | "tools";
+
+const enc = encodeURIComponent;
 
 export const statusQuery = queryOptions({
   queryKey: keys.status,
@@ -56,6 +86,26 @@ export const approvalsQuery = queryOptions({ queryKey: keys.approvals, queryFn: 
 export const agentsQuery = queryOptions({ queryKey: keys.agents, queryFn: () => api<Agent[]>("/agents") });
 export const skillsQuery = queryOptions({ queryKey: keys.skills, queryFn: () => api<SkillEntry[]>("/skills"), staleTime: 5 * 60_000 });
 export const temperatureQuery = queryOptions({ queryKey: keys.temperature, queryFn: () => api<TemperatureReport>("/temperature") });
+
+export const environmentsQuery = queryOptions({ queryKey: keys.environments, queryFn: () => api<Environment[]>("/environments") });
+/** Everything in an environment, archived included: filters and search run on the client, `q` on the server. */
+export const knowledgeQuery = (environmentId: string | undefined, q = "") =>
+  queryOptions({
+    queryKey: [...keys.knowledge, "list", environmentId ?? "", q],
+    queryFn: () => api<KnowledgeEntry[]>(`/knowledge?environmentId=${enc(environmentId ?? "")}&archived=1${q ? `&q=${enc(q)}` : ""}`),
+    enabled: Boolean(environmentId),
+    placeholderData: (prev) => prev,
+  });
+export const knowledgeEntryQuery = (id: string) =>
+  queryOptions({ queryKey: [...keys.knowledge, "entry", id], queryFn: () => api<KnowledgeDetail>(`/knowledge/${enc(id)}`) });
+export const chatsQuery = (environmentId: string | undefined) =>
+  queryOptions({
+    queryKey: [...keys.chats, environmentId ?? ""],
+    queryFn: () => api<Chat[]>(`/chats?environmentId=${enc(environmentId ?? "")}`),
+    enabled: Boolean(environmentId),
+  });
+export const chatQuery = (id: string) => queryOptions({ queryKey: keys.chat(id), queryFn: () => api<ChatDetail>(`/chats/${enc(id)}`) });
+export const toolsQuery = queryOptions({ queryKey: keys.tools, queryFn: () => api<ToolsInventory>("/tools"), staleTime: 60_000 });
 
 // ── mutations ─────────────────────────────────────────────────────────────
 
@@ -93,3 +143,17 @@ export const useSaveAgent = () =>
     ({ id, edit }: { id: string; edit: AgentEdit }) => put<Agent>(`/agents/${encodeURIComponent(id)}`, edit),
     [keys.agents, keys.approvals, keys.status],
   );
+
+export const useCreateEnvironment = () =>
+  useInvalidating((input: { name: string; rootPath: string }) => post<Environment>("/environments", input), [keys.environments]);
+
+export const useAddKnowledge = () => useInvalidating((input: KnowledgeInput) => post<KnowledgeEntry>("/knowledge", input), [keys.knowledge]);
+
+export const useUpdateKnowledge = () =>
+  useInvalidating(({ id, patch: body }: { id: string; patch: KnowledgePatch }) => patch<KnowledgeEntry>(`/knowledge/${enc(id)}`, body), [keys.knowledge]);
+
+export const useStartChat = () =>
+  useInvalidating((input: { environmentId: string; title: string; message: string }) => post<Chat>("/chats", input), [keys.chats]);
+
+export const useSendChatMessage = () =>
+  useInvalidating(({ chatId, message }: { chatId: string; message: string }) => post<{ ok: true }>(`/chats/${enc(chatId)}/messages`, { message }), [keys.chats, ["chat"]]);

@@ -13,12 +13,20 @@ const InboxPage = page(() => import("@/features/inbox/inbox-page"), "InboxPage")
 const ThermostatPage = page(() => import("@/features/thermostat/thermostat-page"), "ThermostatPage");
 const AgentsPage = page(() => import("@/features/agents/agents-page"), "AgentsPage");
 const SkillsPage = page(() => import("@/features/skills/skills-page"), "SkillsPage");
+const ChiefPage = page(() => import("@/features/chief/chief-page"), "ChiefPage");
+const KnowledgePage = page(() => import("@/features/knowledge/knowledge-page"), "KnowledgePage");
+const ToolsPage = page(() => import("@/features/tools/tools-page"), "ToolsPage");
 
 export function App() {
   return (
     <Routes>
       <Route element={<AppShell />}>
-        <Route index element={<Navigate to="/board" replace />} />
+        <Route index element={<Navigate to="/chief" replace />} />
+        <Route path="chief" element={<ChiefPage />} />
+        <Route path="chief/:chatId" element={<ChiefPage />} />
+        <Route path="knowledge" element={<KnowledgePage />} />
+        <Route path="knowledge/:id" element={<KnowledgePage />} />
+        <Route path="tools" element={<ToolsPage />} />
         <Route path="board" element={<BoardPage />} />
         <Route path="tickets/:id" element={<TicketPage />} />
         <Route path="runs" element={<RunsPage />} />

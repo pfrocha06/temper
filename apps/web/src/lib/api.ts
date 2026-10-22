@@ -1,3 +1,5 @@
+import { setAuthRequired } from "./auth";
+
 export class ApiError extends Error {
   readonly status: number;
   constructor(status: number, message: string) {
@@ -28,6 +30,8 @@ export async function api<T>(path: string, init?: { method?: string; body?: unkn
       data = text;
     }
   }
+  if (res.status === 401) setAuthRequired(true);
+  else if (res.ok) setAuthRequired(false);
   if (!res.ok) {
     const message =
       data && typeof data === "object" && "error" in data && typeof data.error === "string" ? data.error : `${res.status} ${res.statusText}`;
@@ -38,3 +42,4 @@ export async function api<T>(path: string, init?: { method?: string; body?: unkn
 
 export const post = <T>(path: string, body: unknown = {}) => api<T>(path, { method: "POST", body });
 export const put = <T>(path: string, body: unknown) => api<T>(path, { method: "PUT", body });
+export const patch = <T>(path: string, body: unknown) => api<T>(path, { method: "PATCH", body });

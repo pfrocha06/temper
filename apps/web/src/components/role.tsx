@@ -1,4 +1,4 @@
-import { CompassIcon, FlaskConicalIcon, HammerIcon, ScanEyeIcon, ServerCogIcon, type LucideIcon } from "lucide-react";
+import { CrownIcon, FlaskConicalIcon, HammerIcon, ScanEyeIcon, ServerCogIcon, type LucideIcon } from "lucide-react";
 import { cn } from "cn";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { StageActor } from "@/lib/workflows";
@@ -7,7 +7,7 @@ type RoleMeta = { label: string; icon: LucideIcon; text: string; does: string };
 
 /** One icon and accent per role, used everywhere a role appears. */
 export const ROLE_META: Record<StageActor, RoleMeta> = {
-  planner: { label: "Planner", icon: CompassIcon, text: "text-role-planner", does: "Grills, writes specs, splits tickets" },
+  chief: { label: "Chief of Staff", icon: CrownIcon, text: "text-role-chief", does: "Holds the picture: talks with you, writes specs and tickets, curates knowledge" },
   builder: { label: "Builder", icon: HammerIcon, text: "text-role-builder", does: "Builds test-first in a worktree" },
   verifier: { label: "Verifier", icon: FlaskConicalIcon, text: "text-role-verifier", does: "Owns holdouts; proves it against the running app" },
   reviewer: { label: "Reviewer", icon: ScanEyeIcon, text: "text-role-reviewer", does: "Adversarial review of the diff" },

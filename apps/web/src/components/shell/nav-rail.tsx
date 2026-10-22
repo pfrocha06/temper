@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { BotIcon, InboxIcon, KanbanIcon, LibraryIcon, PlayIcon, ThermometerIcon, type LucideIcon } from "lucide-react";
+import { BookOpenIcon, BotIcon, CrownIcon, InboxIcon, KanbanIcon, LibraryIcon, PlayIcon, PlugZapIcon, ThermometerIcon, type LucideIcon } from "lucide-react";
 import { NavLink } from "react-router";
 import { cn } from "cn";
 import { Kbd } from "@/components/ui/kbd";
@@ -7,11 +7,14 @@ import { statusQuery } from "@/lib/queries";
 import { ThemeSwitch } from "./theme-switch";
 
 export const NAV: Array<{ to: string; label: string; icon: LucideIcon; key: string }> = [
+  { to: "/chief", label: "Chief of Staff", icon: CrownIcon, key: "c" },
   { to: "/board", label: "Board", icon: KanbanIcon, key: "b" },
   { to: "/runs", label: "Live runs", icon: PlayIcon, key: "r" },
   { to: "/inbox", label: "Inbox", icon: InboxIcon, key: "i" },
+  { to: "/knowledge", label: "Knowledge", icon: BookOpenIcon, key: "k" },
   { to: "/thermostat", label: "Thermostat", icon: ThermometerIcon, key: "t" },
   { to: "/agents", label: "Agents", icon: BotIcon, key: "a" },
+  { to: "/tools", label: "Tools", icon: PlugZapIcon, key: "o" },
   { to: "/skills", label: "Skills", icon: LibraryIcon, key: "s" },
 ];
 

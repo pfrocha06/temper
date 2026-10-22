@@ -4,6 +4,8 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthGate } from "@/components/auth-gate";
+import { EnvironmentProvider } from "@/hooks/use-environment";
 import { ProjectProvider } from "@/hooks/use-project";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { ApiError } from "@/lib/api";
@@ -29,9 +31,13 @@ createRoot(document.getElementById("root")!).render(
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <TooltipProvider>
-            <ProjectProvider>
-              <App />
-            </ProjectProvider>
+            <AuthGate>
+              <EnvironmentProvider>
+                <ProjectProvider>
+                  <App />
+                </ProjectProvider>
+              </EnvironmentProvider>
+            </AuthGate>
           </TooltipProvider>
         </BrowserRouter>
         <Toaster position="bottom-right" />

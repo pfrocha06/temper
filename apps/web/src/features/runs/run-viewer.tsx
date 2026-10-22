@@ -11,8 +11,9 @@ import { useNow } from "@/hooks/use-now";
 import { duration } from "@/lib/format";
 import { derivePipeline } from "@/lib/pipeline";
 import { ticketQuery } from "@/lib/queries";
-import { toRunLine } from "@/lib/run-events";
+import { foldGateSteps, toRunLine } from "@/lib/run-events";
 import type { Dispatch, Ticket } from "@/lib/types";
+import { isDigest } from "@/lib/workflows";
 import { RunLineView } from "./run-line";
 import { useRunEvents } from "./use-run-events";
 
@@ -21,7 +22,8 @@ const VERDICT_TONE: Record<string, string> = { PASS: "text-pass", FAIL: "text-fa
 export function RunViewer({ dispatch, ticket }: { dispatch: Dispatch; ticket: Ticket | undefined }) {
   const running = dispatch.status === "running";
   const { events, history, streaming } = useRunEvents(dispatch.id, running);
-  const lines = useMemo(() => events.map(toRunLine), [events]);
+  const server = dispatch.agentId === "server";
+  const lines = useMemo(() => (server ? foldGateSteps(events.map(toRunLine)) : events.map(toRunLine)), [events, server]);
   const now = useNow(running);
   const hasResult = lines.some((l) => l.kind === "result");
   const [follow, setFollow] = useState(true);
@@ -34,7 +36,7 @@ export function RunViewer({ dispatch, ticket }: { dispatch: Dispatch; ticket: Ti
   useLayoutEffect(() => {
     const el = scroller.current;
     if (follow && el) el.scrollTop = el.scrollHeight;
-  }, [lines.length, follow]);
+  }, [lines, follow]);
 
   // Scrolling up to read pauses following; scrolling back to the bottom resumes it.
   const onScroll = () => {
@@ -57,7 +59,7 @@ export function RunViewer({ dispatch, ticket }: { dispatch: Dispatch; ticket: Ti
           <div className="flex min-w-0 flex-1 flex-col">
             <h2 id="run-h" className="flex flex-wrap items-baseline gap-x-2 text-sm font-semibold">
               <span className={m.text}>{m.label}</span>
-              <span>{dispatch.stage}</span>
+              <span title={isDigest(dispatch) ? "After the ticket finished: not a workflow stage" : undefined}>{isDigest(dispatch) ? "knowledge digest" : dispatch.stage}</span>
               {dispatch.attempt > 1 ? <span className="font-normal text-muted-foreground">attempt {dispatch.attempt}</span> : null}
               <span className={cn("font-mono text-xs", running ? "text-foreground" : (VERDICT_TONE[dispatch.verdict ?? ""] ?? "text-muted-foreground"))}>
                 {running ? (streaming ? "live" : "connecting") : (dispatch.verdict ?? dispatch.status)}
@@ -94,12 +96,25 @@ export function RunViewer({ dispatch, ticket }: { dispatch: Dispatch; ticket: Ti
           </div>
         ) : lines.length === 0 ? (
           <p className="px-4 py-6 text-sm text-muted-foreground">
-            {running ? "Waiting for the agent's first event…" : "No events recorded. Gate stages run on the server and leave only a summary."}
+            {running
+              ? server
+                ? "Starting the checks…"
+                : "Waiting for the agent's first event…"
+              : server
+                ? dispatch.summary ? "No step-by-step progress was recorded for this server run; its summary is below." : "No progress was recorded for this server run."
+                : "No events recorded."}
           </p>
         ) : (
           <ol aria-live={running && follow ? "polite" : "off"} aria-relevant="additions">
             {lines.map((l, i) => (
-              <RunLineView key={l.id} line={l} live={running && i === lines.length - 1} accent={m.text} />
+              <RunLineView
+                key={l.id}
+                line={l}
+                live={running && i === lines.length - 1}
+                running={running}
+                accent={m.text}
+                gate={server}
+              />
             ))}
           </ol>
         )}

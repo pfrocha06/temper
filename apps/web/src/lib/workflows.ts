@@ -15,13 +15,20 @@ export const WORKFLOW_STAGES: Record<TicketType, StageDef[]> = {
   feature: [agent("build", "builder"), agent("verify", "verifier"), gate("gates"), agent("review", "reviewer"), gate("pr")],
   bugfix: [agent("reproduce", "builder"), agent("fix", "builder"), agent("verify", "verifier"), gate("gates"), agent("review", "reviewer"), gate("pr")],
   refactor: [agent("build", "builder"), gate("gates"), agent("review", "reviewer"), gate("pr")],
-  investigation: [agent("investigate", "planner"), agent("review", "reviewer")],
+  investigation: [agent("investigate", "chief"), agent("review", "reviewer")],
   prototype: [agent("sketch", "builder"), agent("review", "reviewer")],
   perf: [agent("baseline", "builder"), agent("build", "builder"), gate("gates"), agent("review", "reviewer"), gate("pr")],
   chore: [agent("build", "builder"), gate("gates"), agent("review", "reviewer"), gate("pr")],
   skill: [agent("author", "builder"), agent("eval", "verifier"), gate("gates"), agent("review", "reviewer"), gate("pr")],
   verification: [agent("author", "verifier"), agent("review", "reviewer")],
 };
+
+/**
+ * After a ticket is done, the Chief of Staff runs a `digest` dispatch on it to curate shared
+ * knowledge. It is not a workflow stage: pipelines leave it out and show it as a note instead.
+ */
+export const DIGEST_STAGE = "digest";
+export const isDigest = (d: { stage: string }) => d.stage === DIGEST_STAGE;
 
 export function stagesFor(type: string): StageDef[] | undefined {
   return WORKFLOW_STAGES[type as TicketType];

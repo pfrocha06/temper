@@ -4,10 +4,12 @@ import { CommandPalette } from "@/components/command-palette";
 import { RowsSkeleton } from "@/components/query-state";
 import { ImportSpecDialog } from "@/features/board/import-spec-dialog";
 import { NewTicketDialog } from "@/features/board/new-ticket-dialog";
+import { EntryDialog } from "@/features/knowledge/entry-dialog";
 import { AppActionsProvider, useAppActions } from "@/hooks/use-app-actions";
 import { useHotkeys } from "@/hooks/use-hotkeys";
 import { useLiveUpdates } from "@/hooks/use-live-updates";
 import { useProject } from "@/hooks/use-project";
+import { NewEnvironmentDialog } from "./environment-picker";
 import { FactoryBar } from "./factory-bar";
 import { NAV, NavRail } from "./nav-rail";
 
@@ -54,6 +56,8 @@ function Shell() {
         </main>
       </div>
       <CommandPalette />
+      <EntryDialog open={actions.open === "add-knowledge"} onOpenChange={(o) => actions.setOpen("add-knowledge", o)} />
+      <NewEnvironmentDialog open={actions.open === "new-environment"} onOpenChange={(o) => actions.setOpen("new-environment", o)} />
       {project ? (
         <>
           <NewTicketDialog projectId={project.id} open={actions.open === "new-ticket"} onOpenChange={(o) => actions.setOpen("new-ticket", o)} />
