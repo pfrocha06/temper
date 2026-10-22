@@ -13,6 +13,6 @@
     "check:agnostic": "node scripts/check-agnostic.mjs",
     "vendor:skills": "node scripts/vendor-skills.mjs",
     "check": "pnpm check:agnostic && pnpm typecheck && pnpm test",
-    "dev": "pnpm --parallel --filter @temper/server --filter @temper/web dev"
+    "dev": "TEMPER_INSTANCE=dev TEMPER_PORT=4610 TEMPER_API_URL=http://127.0.0.1:4610 pnpm --parallel --filter @temper/server --filter @temper/web dev"
   }
 }

@@ -21,7 +21,7 @@ export function readRegistry(appRoot: string): SkillEntry[] {
 function describe(dir: string): string | undefined {
   const md = join(dir, "SKILL.md");
   if (!existsSync(md)) return undefined;
-  return /^description:\s*(.+)$/m.exec(readFileSync(md, "utf8"))?.[1]?.trim();
+  return /^description:\s*(.+)$/m.exec(readFileSync(md, "utf8"))?.[1]?.trim().replace(/^(["'])(.*)\1$/, "$2");
 }
 
 /** Absolute skill directories for the given names. Unknown names are reported, not fatal. */
