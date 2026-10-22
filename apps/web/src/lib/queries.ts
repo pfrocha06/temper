@@ -42,8 +42,7 @@ export const ticketsQuery = (projectId: string | undefined) =>
     queryKey: [...keys.tickets, projectId ?? "all"],
     queryFn: () => api<Ticket[]>(projectId ? `/tickets?projectId=${encodeURIComponent(projectId)}` : "/tickets"),
   });
-export const ticketQuery = (id: string) =>
-  queryOptions({ queryKey: keys.ticket(id), queryFn: () => api<TicketDetail>(`/tickets/${encodeURIComponent(id)}`) });
+export const ticketQuery = (id: string) => queryOptions({ queryKey: keys.ticket(id), queryFn: () => api<TicketDetail>(`/tickets/${encodeURIComponent(id)}`) });
 export const dispatchesQuery = queryOptions({ queryKey: keys.dispatches, queryFn: () => api<Dispatch[]>("/dispatches?limit=100") });
 export const dispatchQuery = (id: string) =>
   queryOptions({ queryKey: keys.dispatch(id), queryFn: () => api<Dispatch>(`/dispatches/${encodeURIComponent(id)}`) });
@@ -68,11 +67,9 @@ function useInvalidating<TVars, TResult>(fn: (vars: TVars) => Promise<TResult>, 
   });
 }
 
-export const useSetPaused = () =>
-  useInvalidating((paused: boolean) => post<{ ok: true }>(paused ? "/pause" : "/resume"), [keys.status]);
+export const useSetPaused = () => useInvalidating((paused: boolean) => post<{ ok: true }>(paused ? "/pause" : "/resume"), [keys.status]);
 
-export const useCreateTicket = () =>
-  useInvalidating((input: NewTicketInput) => post<Ticket>("/tickets", input), [keys.tickets, keys.status]);
+export const useCreateTicket = () => useInvalidating((input: NewTicketInput) => post<Ticket>("/tickets", input), [keys.tickets, keys.status]);
 
 export const useImportSpec = () =>
   useInvalidating(
@@ -91,12 +88,8 @@ export const useReportEscape = () =>
     [keys.tickets, keys.temperature, keys.status],
   );
 
-export const useResolveApproval = () =>
-  useInvalidating(
-    ({ id, resolution, note }: { id: string; resolution: string; note?: string }) =>
-      post<Approval>(`/approvals/${encodeURIComponent(id)}/resolve`, { resolution, note }),
-    [keys.approvals, keys.status, keys.tickets, ["ticket"]],
-  );
-
 export const useSaveAgent = () =>
-  useInvalidating(({ id, edit }: { id: string; edit: AgentEdit }) => put<Agent>(`/agents/${encodeURIComponent(id)}`, edit), [keys.agents, keys.approvals, keys.status]);
+  useInvalidating(
+    ({ id, edit }: { id: string; edit: AgentEdit }) => put<Agent>(`/agents/${encodeURIComponent(id)}`, edit),
+    [keys.agents, keys.approvals, keys.status],
+  );

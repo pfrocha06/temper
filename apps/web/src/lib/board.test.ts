@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fileScopeHint, groupByStatus, parseLines } from "./board";
+import { groupByStatus, parseLines } from "./board";
 import type { Ticket } from "./types";
 
 const ticket = (id: string, status: string, createdAt: string, updatedAt = createdAt): Ticket =>
@@ -34,13 +34,5 @@ describe("parseLines", () => {
 
   it("keeps globs intact", () => {
     expect(parseLines("src/**/*.ts\nBash(git diff:*)")).toEqual(["src/**/*.ts", "Bash(git diff:*)"]);
-  });
-});
-
-describe("fileScopeHint", () => {
-  it("shows the first path and how many more", () => {
-    expect(fileScopeHint([])).toBeUndefined();
-    expect(fileScopeHint(["a"])).toBe("a");
-    expect(fileScopeHint(["a", "b", "c"])).toBe("a +2");
   });
 });

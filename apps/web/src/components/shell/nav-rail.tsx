@@ -24,7 +24,7 @@ export function NavRail() {
         <TemperMark />
         <span className="text-[0.9375rem] font-semibold tracking-tight">Temper</span>
       </div>
-      <ul className="flex gap-0.5 px-2 md:flex-col max-md:overflow-x-auto max-md:py-1.5">
+      <ul className="flex gap-0.5 px-2 md:flex-col max-md:overflow-x-auto max-md:py-1.5 max-md:[scrollbar-width:none]">
         {NAV.map(({ to, label, icon: Icon, key }) => (
           <li key={to}>
             <NavLink
