@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { loadBoardToken } from "./auth.ts";
 import { loadConfig } from "./config.ts";
 import { probeHoldoutIsolation } from "./probe.ts";
-import { activate, backupDatabase, buildRelease, readState, restoreDatabase, waitHealthy } from "./releases.ts";
+import { activate, backupDatabase, buildRelease, readState, restoreDatabase, waitHealthy, waitStopped } from "./releases.ts";
 import { run } from "./exec.ts";
 import { installService, serviceInstalled, uninstallService } from "./service.ts";
 
@@ -30,23 +30,33 @@ const log = (s: string) => console.log(s);
 async function deploy(ref: string, source: string) {
   const tag = await buildRelease(config.home, source, ref, log);
   const before = readState(config.home);
-  log(`→ stopping service`);
-  await uninstallService(config.home);
-  const backup = backupDatabase(config.home);
-  activate(config.home, tag, "deploy");
-  await installService(config.home);
-  log(`→ waiting for ${tag} to become healthy`);
-  if (await waitHealthy(config.port, 45_000)) {
-    log(`✓ deployed ${tag}`);
-    return;
-  }
-  log(`✗ ${tag} failed its health check — rolling back`);
-  await uninstallService(config.home);
-  if (backup) restoreDatabase(config.home, backup);
-  if (before.current) {
-    activate(config.home, before.current, "rollback");
+  let switched = false;
+  let backup: string | undefined;
+  try {
+    log(`→ stopping service`);
+    await uninstallService(config.home);
+    if (!(await waitStopped(config.port))) throw new Error("the old server did not stop within 30s");
+    backup = backupDatabase(config.home);
+    activate(config.home, tag, "deploy");
+    switched = true;
     await installService(config.home);
-    log((await waitHealthy(config.port)) ? `✓ rolled back to ${before.current}` : `✗ rollback did not come up; check ${config.home}/logs/main.log`);
+    log(`→ waiting for ${tag} to become healthy`);
+    if (await waitHealthy(config.port, 45_000)) {
+      log(`✓ deployed ${tag}`);
+      return;
+    }
+    log(`✗ ${tag} failed its health check — rolling back`);
+  } catch (err) {
+    log(`✗ deploy failed: ${(err as Error).message} — restoring the previous release`);
+  }
+  // Any failure after the service stopped: bring the previous release (and its data) back up.
+  await uninstallService(config.home);
+  await waitStopped(config.port);
+  if (switched && backup) restoreDatabase(config.home, backup);
+  if (before.current) {
+    if (switched) activate(config.home, before.current, "rollback");
+    await installService(config.home);
+    log((await waitHealthy(config.port)) ? `✓ running ${before.current} again` : `✗ previous release did not come up; check ${config.home}/logs/main.log`);
   }
   process.exitCode = 1;
 }
@@ -55,6 +65,7 @@ async function rollback() {
   const state = readState(config.home);
   if (!state.previous) throw new Error("no previous release to roll back to");
   await uninstallService(config.home);
+  await waitStopped(config.port);
   activate(config.home, state.previous, "rollback");
   await installService(config.home);
   log((await waitHealthy(config.port)) ? `✓ rolled back to ${state.previous}` : "✗ service did not come up");

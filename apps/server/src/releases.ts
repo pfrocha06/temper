@@ -80,8 +80,29 @@ export function backupDatabase(home: string, instance = "main"): string | undefi
   if (!existsSync(db)) return undefined;
   const dest = join(home, "backups", `${instance}-${new Date().toISOString().replace(/[:.]/g, "-")}`);
   mkdirSync(join(home, "backups"), { recursive: true });
-  cpSync(db, dest, { recursive: true });
+  try {
+    cpSync(db, dest, { recursive: true });
+  } catch (err) {
+    rmSync(dest, { recursive: true, force: true });
+    throw err;
+  }
   return dest;
+}
+
+/** Waits until nothing answers on the port: the old server has exited and closed its database. */
+export async function waitStopped(port: number, timeoutMs = 30_000): Promise<boolean> {
+  const end = Date.now() + timeoutMs;
+  while (Date.now() < end) {
+    try {
+      await fetch(`http://127.0.0.1:${port}/api/health`, { signal: AbortSignal.timeout(1000) });
+    } catch {
+      // Connection refused: give the process a moment to release file handles after its socket closes.
+      await new Promise((r) => setTimeout(r, 1500));
+      return true;
+    }
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  return false;
 }
 
 export function restoreDatabase(home: string, backup: string, instance = "main"): void {
