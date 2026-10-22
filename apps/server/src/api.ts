@@ -25,16 +25,34 @@ import {
   TICKET_TYPES,
   updateProject,
   updateTicket,
+  addKnowledge,
+  chatHistory,
+  createChat,
+  createEnvironment,
+  getChat,
+  getKnowledge,
+  KNOWLEDGE_KINDS,
+  knowledgeReadsFor,
+  listChats,
+  listEnvironments,
+  searchKnowledge,
+  updateKnowledge,
   type Db,
   type Role,
 } from "@temper/core";
 import type { Config } from "./config.ts";
 import type { Factory } from "./factory.ts";
+import { setCookie } from "hono/cookie";
+import { createAgentApi } from "./agent-api.ts";
+import { BOARD_COOKIE, type Auth } from "./auth.ts";
 import { createHealth } from "./health.ts";
+import { loadProfile, type Profile } from "./profile.ts";
+import { inventory } from "./tools.ts";
 import { readRegistry } from "./skills.ts";
 
 const NewProject = z.object({
   name: z.string().min(1),
+  environmentId: z.string().optional(),
   repoPath: z.string().min(1),
   remoteUrl: z.string().optional(),
   holdoutsPath: z.string().optional(),
@@ -62,15 +80,30 @@ const AgentEdit = z.object({
   name: z.string().min(1),
   model: z.string().nullable(),
   skills: z.array(z.string()),
+  mcpServers: z.array(z.string()).optional(),
   permissions: z.object({ allowedTools: z.array(z.string()), disallowedTools: z.array(z.string()) }),
   maxConcurrency: z.number().int().min(0).max(8),
   runsPerHour: z.number().int().min(0).max(120),
   instructions: z.string(),
 });
 
-export function createApi(db: Db, factory: Factory, config: Config, opts: { uptime?: () => number } = {}): Hono {
+export function createApi(db: Db, factory: Factory, config: Config, opts: { uptime?: () => number; auth?: Auth; profile?: Profile } = {}): Hono {
   const app = new Hono();
   const health = createHealth(config, opts.uptime);
+  const auth = opts.auth;
+
+  if (auth) {
+    app.use("*", auth.hostGuard());
+    // `temper open` sends the board here once; the token becomes an HttpOnly, same-site cookie.
+    app.get("/auth", (c) => {
+      if (!auth.isBoard(c.req.query("token"))) return c.text("invalid token", 401);
+      setCookie(c, BOARD_COOKIE, auth.boardToken, { httpOnly: true, sameSite: "Strict", path: "/", maxAge: 365 * 86_400 });
+      return c.redirect("/");
+    });
+    app.route("/api/agent", createAgentApi(db, auth, () => void factory.tick()));
+    const board = auth.board();
+    app.use("/api/*", async (c, next) => (c.req.path === "/api/health" || c.req.path.startsWith("/api/agent/") ? next() : board(c, next)));
+  }
 
   app.onError((err, c) => c.json({ error: err.message }, err instanceof z.ZodError ? 400 : 500));
 
@@ -146,8 +179,70 @@ export function createApi(db: Db, factory: Factory, config: Config, opts: { upti
     const current = (await listAgents(db)).find((a) => a.id === c.req.param("id"));
     if (!current) return c.json({ error: "not found" }, 404);
     const edit = AgentEdit.parse(await c.req.json());
-    return c.json(await saveAgent(db, { id: current.id, role: current.role, adapter: current.adapter, ...edit }));
+    return c.json(await saveAgent(db, { id: current.id, role: current.role, adapter: current.adapter, ...edit, mcpServers: edit.mcpServers ?? current.mcpServers }));
   });
+
+  // ── environments, knowledge, Chief conversations, tools ─────────────────
+  app.get("/api/environments", async (c) => c.json(await listEnvironments(db)));
+  app.post("/api/environments", async (c) =>
+    c.json(await createEnvironment(db, z.object({ name: z.string().min(1), rootPath: z.string().min(1) }).parse(await c.req.json())), 201),
+  );
+
+  app.get("/api/knowledge", async (c) => {
+    const environmentId = c.req.query("environmentId") ?? "env_default";
+    return c.json(
+      await searchKnowledge(db, {
+        environmentId,
+        projectId: c.req.query("projectId"),
+        text: c.req.query("q"),
+        includeArchived: c.req.query("archived") === "1",
+        limit: 200,
+      }),
+    );
+  });
+  const KnowledgeBody = z.object({
+    environmentId: z.string(),
+    projectId: z.string().nullable().optional(),
+    area: z.string().nullable().optional(),
+    kind: z.enum(KNOWLEDGE_KINDS),
+    title: z.string().min(3),
+    abstract: z.string().min(3),
+    body: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+  });
+  app.post("/api/knowledge", async (c) => c.json(await addKnowledge(db, { ...KnowledgeBody.parse(await c.req.json()), source: "board" }, "board"), 201));
+  app.get("/api/knowledge/:id", async (c) => {
+    const e = await getKnowledge(db, c.req.param("id"));
+    return e ? c.json({ ...e, reads: await knowledgeReadsFor(db, e.id) }) : c.json({ error: "not found" }, 404);
+  });
+  app.patch("/api/knowledge/:id", async (c) => {
+    const patch = KnowledgeBody.omit({ environmentId: true })
+      .partial()
+      .extend({ pinned: z.number().int().min(0).max(1).optional(), status: z.enum(["active", "archived"]).optional() })
+      .parse(await c.req.json());
+    return c.json(await updateKnowledge(db, c.req.param("id"), patch, "board"));
+  });
+
+  app.get("/api/chats", async (c) => c.json(await listChats(db, c.req.query("environmentId"))));
+  app.post("/api/chats", async (c) => {
+    const { environmentId, title, message } = z
+      .object({ environmentId: z.string(), title: z.string().min(1).max(120), message: z.string().min(1) })
+      .parse(await c.req.json());
+    const chat = await createChat(db, environmentId, title);
+    await factory.chat(chat.id, message);
+    return c.json(chat, 201);
+  });
+  app.get("/api/chats/:id", async (c) => {
+    const chat = await getChat(db, c.req.param("id"));
+    return chat ? c.json({ chat, messages: await chatHistory(db, chat.id), thinking: factory.isChatting(chat.id) }) : c.json({ error: "not found" }, 404);
+  });
+  app.post("/api/chats/:id/messages", async (c) => {
+    const { message } = z.object({ message: z.string().min(1) }).parse(await c.req.json());
+    await factory.chat(c.req.param("id"), message);
+    return c.json({ ok: true }, 202);
+  });
+
+  app.get("/api/tools", async (c) => c.json(await inventory(opts.profile ?? loadProfile(config.home), await listAgents(db), config.claudeBin)));
 
   app.get("/api/temperature", async (c) => c.json({ history: await snapshotHistory(db, 200), policies: REGIME_POLICIES, enforced: false }));
   app.get("/api/skills", (c) => c.json(readRegistry(config.appRoot)));
@@ -167,10 +262,14 @@ export function createApi(db: Db, factory: Factory, config: Config, opts: { upti
       const offEvents = onDispatchEvent((e) => dispatchFilter !== undefined && e.dispatchId === dispatchFilter && push("dispatch_event", e));
       const onChange = () => push("change", {});
       factory.on("change", onChange);
+      const chatFilter = c.req.query("chat");
+      const onChat = (e: { chatId: string }) => chatFilter !== undefined && e.chatId === chatFilter && push("chat", e);
+      factory.on("chat", onChat);
       stream.onAbort(() => {
         offAudit();
         offEvents();
         factory.off("change", onChange);
+        factory.off("chat", onChat);
         wake?.();
       });
       while (!stream.aborted) {

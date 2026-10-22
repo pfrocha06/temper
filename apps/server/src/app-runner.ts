@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { createServer } from "node:net";
 
 export async function freePort(): Promise<number> {
@@ -12,18 +13,20 @@ export async function freePort(): Promise<number> {
   });
 }
 
-export type RunningApp = { url: string; stop: () => void; logs: () => string };
+/** A candidate app under test. It runs with its own board token so checks can call its API. */
+export type RunningApp = { url: string; token: string; stop: () => void; logs: () => string };
 
 /** Boots a project's app from a worktree on a free port and waits for its health path. */
 export async function bootApp(command: string, cwd: string, healthPath: string, timeoutMs = 120_000): Promise<RunningApp> {
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
+  const token = randomBytes(24).toString("base64url");
   let logs = "";
   const child: ChildProcess = spawn(command, {
     cwd,
     shell: true,
     detached: true,
-    env: { ...process.env, PORT: String(port), TEMPER_INSTANCE: `app-${port}` },
+    env: { ...process.env, PORT: String(port), TEMPER_INSTANCE: `app-${port}`, TEMPER_BOARD_TOKEN: token },
   });
   child.stdout?.on("data", (b: Buffer) => (logs = (logs + b).slice(-20_000)));
   child.stderr?.on("data", (b: Buffer) => (logs = (logs + b).slice(-20_000)));
@@ -39,7 +42,7 @@ export async function bootApp(command: string, cwd: string, healthPath: string, 
     if (child.exitCode !== null) break;
     try {
       const res = await fetch(url + healthPath);
-      if (res.status < 500) return { url, stop, logs: () => logs };
+      if (res.status < 500) return { url, token, stop, logs: () => logs };
     } catch {
       /* not up yet */
     }

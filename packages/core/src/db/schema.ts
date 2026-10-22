@@ -13,8 +13,17 @@ import {
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
+/** A folder holding several related projects/repos. Knowledge is shared at this level. */
+export const environments = pgTable("environments", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  rootPath: text("root_path").notNull(),
+  createdAt: createdAt(),
+});
+
 export const projects = pgTable("projects", {
   id: text("id").primaryKey(),
+  environmentId: text("environment_id").references(() => environments.id),
   name: text("name").notNull(),
   repoPath: text("repo_path").notNull(),
   remoteUrl: text("remote_url"),
@@ -49,6 +58,8 @@ export const agents = pgTable(
     adapter: text("adapter").notNull(),
     model: text("model"),
     skills: jsonb("skills").$type<string[]>().notNull().default([]),
+    /** MCP servers (by profile name, plus the built-in `temper`) this role may use. */
+    mcpServers: jsonb("mcp_servers").$type<string[]>().notNull().default(["temper"]),
     permissions: jsonb("permissions").$type<AgentPermissions>().notNull(),
     maxConcurrency: integer("max_concurrency").notNull().default(1),
     runsPerHour: integer("runs_per_hour").notNull().default(6),
@@ -175,3 +186,80 @@ export const temperatureSnapshots = pgTable("temperature_snapshots", {
   regime: text("regime").notNull(),
   contributions: jsonb("contributions").notNull(),
 });
+
+export const KNOWLEDGE_KINDS = ["convention", "gotcha", "decision", "howto", "environment", "context"] as const;
+
+/**
+ * Shared project knowledge. Addressed like a path (`env/project/area/slug`) and loaded in
+ * tiers: `title` (L0) and `abstract` (L1) go into prompts; `body` (L2) is fetched on demand.
+ * Only the Chief of Staff writes entries.
+ */
+export const knowledgeEntries = pgTable(
+  "knowledge_entries",
+  {
+    id: text("id").primaryKey(),
+    environmentId: text("environment_id")
+      .notNull()
+      .references(() => environments.id),
+    projectId: text("project_id").references(() => projects.id),
+    /** Optional path prefix inside the project the entry is about, e.g. `apps/web/`. */
+    area: text("area"),
+    kind: text("kind").notNull(),
+    title: text("title").notNull(),
+    abstract: text("abstract").notNull(),
+    body: text("body").notNull().default(""),
+    tags: jsonb("tags").$type<string[]>().notNull().default([]),
+    status: text("status").notNull().default("active"),
+    pinned: integer("pinned").notNull().default(0),
+    version: integer("version").notNull().default(1),
+    /** Where it was learned: a dispatch id, a ticket id, or `board`. */
+    source: text("source"),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("knowledge_env_idx").on(t.environmentId, t.status)],
+);
+
+/** Which entries a run actually loaded: the retrieval trail for debugging memory. */
+export const knowledgeReads = pgTable(
+  "knowledge_reads",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    entryId: text("entry_id")
+      .notNull()
+      .references(() => knowledgeEntries.id),
+    dispatchId: text("dispatch_id"),
+    via: text("via").notNull(),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("knowledge_reads_entry_idx").on(t.entryId)],
+);
+
+/** A conversation between the board and the Chief of Staff (brainstorms, intake, questions). */
+export const chats = pgTable("chats", {
+  id: text("id").primaryKey(),
+  environmentId: text("environment_id")
+    .notNull()
+    .references(() => environments.id),
+  title: text("title").notNull(),
+  /** The agent CLI session, resumed on every turn so the Chief keeps the thread. */
+  sessionId: text("session_id"),
+  createdAt: createdAt(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const chatMessages = pgTable(
+  "chat_messages",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    chatId: text("chat_id")
+      .notNull()
+      .references(() => chats.id),
+    author: text("author").notNull(),
+    content: text("content").notNull(),
+    /** Tool calls the Chief made during this turn (knowledge writes, tickets created). */
+    actions: jsonb("actions").$type<Array<{ tool: string; summary: string }>>().notNull().default([]),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("chat_messages_chat_idx").on(t.chatId, t.id)],
+);

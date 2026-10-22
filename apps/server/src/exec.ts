@@ -11,23 +11,41 @@ export function run(
   return runProcess(spawn(cmd, args, { cwd: opts.cwd, env: opts.env ?? process.env, signal: opts.signal }), opts.timeoutMs);
 }
 
-/** Runs a project-configured command line through the shell (test / app / holdouts commands). */
+/**
+ * Runs a project-configured command line through the shell (test / app / holdouts commands).
+ * `onOutput` receives stdout and stderr chunks as they arrive, interleaved.
+ */
 export function runShell(
   command: string,
-  opts: { cwd: string; env?: NodeJS.ProcessEnv; timeoutMs?: number; signal?: AbortSignal },
+  opts: { cwd: string; env?: NodeJS.ProcessEnv; timeoutMs?: number; signal?: AbortSignal; onOutput?: (chunk: string) => void },
 ): Promise<ExecResult> {
-  return runProcess(spawn(command, { cwd: opts.cwd, env: opts.env ?? process.env, shell: true, signal: opts.signal }), opts.timeoutMs);
+  return runProcess(spawn(command, { cwd: opts.cwd, env: opts.env ?? process.env, shell: true, signal: opts.signal }), opts.timeoutMs, opts.onOutput);
 }
 
 const CAP = 2_000_000;
 
-function runProcess(child: ReturnType<typeof spawn>, timeoutMs = 10 * 60_000): Promise<ExecResult> {
+function runProcess(child: ReturnType<typeof spawn>, timeoutMs = 10 * 60_000, onOutput?: (chunk: string) => void): Promise<ExecResult> {
   return new Promise((resolve) => {
     let stdout = "";
     let stderr = "";
     let timedOut = false;
-    child.stdout?.on("data", (b: Buffer) => (stdout = (stdout + b.toString()).slice(-CAP)));
-    child.stderr?.on("data", (b: Buffer) => (stderr = (stderr + b.toString()).slice(-CAP)));
+    const tee = (chunk: string) => {
+      try {
+        onOutput?.(chunk);
+      } catch {
+        // A progress listener must never break the command it watches.
+      }
+    };
+    child.stdout?.on("data", (b: Buffer) => {
+      const chunk = b.toString();
+      stdout = (stdout + chunk).slice(-CAP);
+      tee(chunk);
+    });
+    child.stderr?.on("data", (b: Buffer) => {
+      const chunk = b.toString();
+      stderr = (stderr + chunk).slice(-CAP);
+      tee(chunk);
+    });
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill("SIGTERM");

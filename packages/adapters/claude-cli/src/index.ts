@@ -1,13 +1,15 @@
 import { spawn } from "node:child_process";
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import type { AgentAdapter, RunEvent, RunRequest, RunResult } from "@temper/core";
 
 export type ClaudeCliOptions = {
   /** Path to the `claude` binary. */
   bin?: string;
+  /** Directories no run may ever read (Temper's own secrets and database), on top of each request's. */
+  alwaysDenyDirs?: string[];
 };
 
 /**
@@ -34,7 +36,15 @@ export function runSettings(req: Pick<RunRequest, "denyDirs">): Record<string, u
   };
 }
 
-export function buildArgs(req: RunRequest, pluginDir?: string): string[] {
+/** Writes the run's MCP config (mode 0600: it carries the run's capability token). */
+export function writeMcpConfig(req: Pick<RunRequest, "mcpServers">): string {
+  const dir = mkdtempSync(join(tmpdir(), "temper-mcp-"));
+  const file = join(dir, "mcp.json");
+  writeFileSync(file, JSON.stringify({ mcpServers: req.mcpServers ?? {} }), { mode: 0o600 });
+  return file;
+}
+
+export function buildArgs(req: RunRequest, pluginDir?: string, mcpConfig?: string): string[] {
   const args = [
     "-p",
     req.prompt,
@@ -44,6 +54,7 @@ export function buildArgs(req: RunRequest, pluginDir?: string): string[] {
     "--setting-sources",
     "project",
     "--strict-mcp-config",
+    ...(mcpConfig ? ["--mcp-config", mcpConfig] : []),
     "--permission-mode",
     "dontAsk",
     "--settings",
@@ -51,7 +62,10 @@ export function buildArgs(req: RunRequest, pluginDir?: string): string[] {
   ];
   if (req.model) args.push("--model", req.model);
   if (req.resumeSessionId) args.push("--resume", req.resumeSessionId);
-  if (req.allowedTools.length) args.push("--allowedTools", ...req.allowedTools);
+  // MCP tools must be allowed by name in non-interactive mode.
+  const mcpTools = Object.keys(req.mcpServers ?? {}).map((name) => `mcp__${name}`);
+  const allowed = [...req.allowedTools, ...mcpTools];
+  if (allowed.length) args.push("--allowedTools", ...allowed);
   if (req.disallowedTools.length) args.push("--disallowedTools", ...req.disallowedTools);
   for (const d of req.addDirs ?? []) args.push("--add-dir", d);
   if (pluginDir) args.push("--plugin-dir", pluginDir);
@@ -123,9 +137,15 @@ export function createClaudeCliAdapter(options: ClaudeCliOptions = {}): AgentAda
     id: "claude-cli",
     isolated: true,
     run(req, onEvent) {
+      req = { ...req, denyDirs: [...(options.alwaysDenyDirs ?? []), ...(req.denyDirs ?? [])] };
       const pluginDir = buildSkillPlugin(req.skillDirs ?? []);
+      const mcpConfig = req.mcpServers && Object.keys(req.mcpServers).length ? writeMcpConfig(req) : undefined;
+      const cleanup = () => {
+        if (pluginDir) rmSync(pluginDir, { recursive: true, force: true });
+        if (mcpConfig) rmSync(dirname(mcpConfig), { recursive: true, force: true });
+      };
       return new Promise<RunResult>((resolve, reject) => {
-        const child = spawn(bin, buildArgs(req, pluginDir), {
+        const child = spawn(bin, buildArgs(req, pluginDir, mcpConfig), {
           cwd: req.cwd,
           env: { ...process.env, ...req.env },
           stdio: ["ignore", "pipe", "pipe"],
@@ -147,13 +167,13 @@ export function createClaudeCliAdapter(options: ClaudeCliOptions = {}): AgentAda
         createInterface({ input: child.stdout }).on("line", (l) => parseLine(l).forEach(handle));
         createInterface({ input: child.stderr }).on("line", (l) => l.trim() && handle({ kind: "stderr", text: l }));
         child.on("error", (err) => {
-          if (pluginDir) rmSync(pluginDir, { recursive: true, force: true });
+          cleanup();
           if ((err as NodeJS.ErrnoException).name === "AbortError") {
             resolve({ finalText, sessionId, exitCode: null, isError: true, rateLimited });
           } else reject(err);
         });
         child.on("close", (exitCode) => {
-          if (pluginDir) rmSync(pluginDir, { recursive: true, force: true });
+          cleanup();
           resolve({ finalText, sessionId, exitCode, isError: isError || exitCode !== 0, rateLimited });
         });
       });

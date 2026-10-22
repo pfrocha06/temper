@@ -12,3 +12,6 @@ export * from "./tickets.ts";
 export * from "./workflow.ts";
 export * from "./dispatches.ts";
 export * from "./health.ts";
+export * from "./environments.ts";
+export * from "./knowledge.ts";
+export * from "./chats.ts";
