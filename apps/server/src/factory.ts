@@ -488,6 +488,8 @@ export class Factory extends EventEmitter {
       context,
       knowledge,
     });
+    // A Linux sandbox has its own network namespace: the Verifier reaches the app through the sandbox proxy.
+    const appViaProxy = stage.role === "verifier" && Boolean(app) && process.platform === "linux";
     try {
       const result = await adapter.run(
         {
@@ -498,6 +500,7 @@ export class Factory extends EventEmitter {
           disallowedTools: stage.readOnly ? [...disallowed, "Edit", "Write"] : disallowed,
           addDirs,
           denyDirs,
+          hostLoopback: appViaProxy,
           skillDirs,
           appendSystemPrompt: agent.instructions || undefined,
           mcpServers: mcp.servers,
@@ -507,6 +510,7 @@ export class Factory extends EventEmitter {
                   ...AGENT_ENV,
                   TEMPER_APP_URL: app?.url ?? "",
                   TEMPER_APP_TOKEN: app?.token ?? "",
+                  ...(appViaProxy ? { TEMPER_APP_VIA_PROXY: "1" } : {}),
                   TEMPER_CANDIDATE_PATH: worktree,
                   TEMPER_TICKET_ID: ticket.id,
                   TEMPER_REGRESSION_TICKETS: (await this.regressionTickets(ticket.projectId)).join(","),
