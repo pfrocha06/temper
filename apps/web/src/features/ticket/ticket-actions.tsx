@@ -11,7 +11,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -22,19 +21,27 @@ import { useCancelTicket, useReportEscape } from "@/lib/queries";
 import type { Ticket } from "@/lib/types";
 
 export function CancelTicketButton({ ticket }: { ticket: Ticket }) {
-  const cancel = useCancelTicket();
+  const [open, setOpen] = useState(false);
   const finished = ticket.status === "done" || ticket.status === "cancelled";
   return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button variant="outline" size="sm" disabled={finished || cancel.isPending}>
-          <XIcon data-icon="inline-start" />
-          Cancel ticket
-        </Button>
-      </AlertDialogTrigger>
+    <>
+      <Button variant="outline" size="sm" disabled={finished} onClick={() => setOpen(true)}>
+        <XIcon data-icon="inline-start" />
+        Cancel ticket
+      </Button>
+      <CancelTicketDialog ticket={open ? ticket : null} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
+/** Confirms a cancel; there is no undo. Open it by passing a ticket. */
+export function CancelTicketDialog({ ticket, onClose }: { ticket: Ticket | null; onClose: () => void }) {
+  const cancel = useCancelTicket();
+  return (
+    <AlertDialog open={ticket !== null} onOpenChange={(o) => !o && onClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Cancel “{ticket.title}”?</AlertDialogTitle>
+          <AlertDialogTitle>Cancel “{ticket?.title}”?</AlertDialogTitle>
           <AlertDialogDescription>Running dispatches are stopped and the worktree is removed. A cancelled ticket cannot be restarted.</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -42,6 +49,7 @@ export function CancelTicketButton({ ticket }: { ticket: Ticket }) {
           <AlertDialogAction
             variant="destructive"
             onClick={() =>
+              ticket &&
               cancel.mutate(ticket.id, {
                 onSuccess: () => toast.success("Ticket cancelled"),
                 onError: (e) => toast.error(`Could not cancel: ${e.message}`),
@@ -94,9 +102,7 @@ export function ReportEscapeButton({ ticket }: { ticket: Ticket }) {
         <form onSubmit={submit} className="flex flex-col gap-5">
           <DialogHeader>
             <DialogTitle>Report escaped bug</DialogTitle>
-            <DialogDescription>
-              A bug that got past verification raises the temperature and opens a bugfix ticket scoped to the same files.
-            </DialogDescription>
+            <DialogDescription>A bug that got past verification raises the temperature and opens a bugfix ticket scoped to the same files.</DialogDescription>
           </DialogHeader>
           <Field data-invalid={error ? true : undefined}>
             <FieldLabel htmlFor="esc-desc">What happens</FieldLabel>

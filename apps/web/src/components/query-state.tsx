@@ -1,7 +1,8 @@
-import { AlertCircleIcon } from "lucide-react";
+import { AlertCircleIcon, InfoIcon } from "lucide-react";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { isOffline } from "@/lib/api";
 
 export function QueryError({ error, onRetry, what }: { error: unknown; onRetry?: () => void; what: string }) {
@@ -34,14 +35,26 @@ export function RowsSkeleton({ rows = 4 }: { rows?: number }) {
   );
 }
 
-export function PageHeader({ title, description, actions }: { title: string; description?: React.ReactNode; actions?: React.ReactNode }) {
+/**
+ * A slim page bar: the title, a few facts beside it, and actions. What the page is for lives
+ * in the info tooltip, not in a sentence under every title.
+ */
+export function PageHeader({ title, info, meta, actions }: { title: string; info?: string; meta?: React.ReactNode; actions?: React.ReactNode }) {
   return (
-    <header className="flex flex-wrap items-end justify-between gap-3 border-b px-6 py-4">
-      <div className="min-w-0">
-        <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
-        {description ? <p className="mt-0.5 text-sm text-muted-foreground">{description}</p> : null}
-      </div>
-      {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+    <header className="flex min-h-12 flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2 md:px-6">
+      <h1 className="text-base font-semibold tracking-tight">{title}</h1>
+      {info ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button type="button" aria-label={`About ${title}`} className="-ml-1.5 rounded-full p-0.5 text-muted-foreground hover:text-foreground">
+              <InfoIcon aria-hidden className="size-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-72">{info}</TooltipContent>
+        </Tooltip>
+      ) : null}
+      {meta ? <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">{meta}</div> : null}
+      {actions ? <div className="ml-auto flex flex-wrap items-center gap-2">{actions}</div> : null}
     </header>
   );
 }

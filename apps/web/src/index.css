@@ -44,6 +44,14 @@
   --pass: oklch(0.52 0.11 155);
   --blocked: oklch(0.6 0.12 75);
   --fail: var(--destructive);
+
+  /* Role accents: one hue per agent role, kept clear of the verdict and heat hues. */
+  --role-planner: oklch(0.52 0.15 300);
+  --role-builder: oklch(0.52 0.13 235);
+  --role-verifier: oklch(0.54 0.16 350);
+  --role-reviewer: oklch(0.5 0.1 190);
+  --role-server: oklch(0.5 0.02 255);
+  --board: var(--primary);
 }
 
 .dark {
@@ -74,6 +82,12 @@
 
   --pass: oklch(0.72 0.12 155);
   --blocked: oklch(0.78 0.12 80);
+
+  --role-planner: oklch(0.72 0.13 300);
+  --role-builder: oklch(0.72 0.11 235);
+  --role-verifier: oklch(0.73 0.13 350);
+  --role-reviewer: oklch(0.74 0.09 190);
+  --role-server: oklch(0.7 0.02 255);
 }
 
 @theme inline {
@@ -106,6 +120,42 @@
   --color-pass: var(--pass);
   --color-blocked: var(--blocked);
   --color-fail: var(--fail);
+  --color-role-planner: var(--role-planner);
+  --color-role-builder: var(--role-builder);
+  --color-role-verifier: var(--role-verifier);
+  --color-role-reviewer: var(--role-reviewer);
+  --color-role-server: var(--role-server);
+  --color-board: var(--board);
+
+  /* Live state. Applied with motion-safe: so reduced motion gets a static ring instead. */
+  --animate-beacon: beacon 1.8s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+  --animate-arrive: arrive 2.4s ease-out 1;
+  --animate-flow: flow 1.2s linear infinite;
+  @keyframes beacon {
+    0% {
+      box-shadow: 0 0 0 0 color-mix(in oklab, currentColor 55%, transparent);
+    }
+    70%,
+    100% {
+      box-shadow: 0 0 0 7px color-mix(in oklab, currentColor 0%, transparent);
+    }
+  }
+  @keyframes arrive {
+    0% {
+      background-color: color-mix(in oklab, var(--primary) 18%, transparent);
+    }
+    100% {
+      background-color: transparent;
+    }
+  }
+  @keyframes flow {
+    from {
+      background-position: 0 0;
+    }
+    to {
+      background-position: 16px 0;
+    }
+  }
 
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -146,6 +196,7 @@
 .prose-temper {
   @apply text-sm leading-6 text-foreground;
   max-width: 78ch;
+  overflow-wrap: anywhere;
 }
 .prose-temper > * + * {
   @apply mt-3;

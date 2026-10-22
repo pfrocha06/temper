@@ -1,49 +1,175 @@
-import { PlayIcon } from "lucide-react";
+import { useDraggable } from "@dnd-kit/core";
+import { CheckCheckIcon, EllipsisIcon, ExternalLinkIcon, GitPullRequestIcon, PlayIcon, XIcon } from "lucide-react";
+import { memo } from "react";
 import { Link } from "react-router";
-import { toast } from "sonner";
-import { TicketTypeBadge } from "@/components/badges";
+import { cn } from "cn";
+import { PipelineStrip } from "@/components/pipeline";
+import { RoleAvatar } from "@/components/role";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
-import { fileScopeHint } from "@/lib/board";
-import { useStartTicket } from "@/lib/queries";
-import type { Ticket } from "@/lib/types";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { duration, relativeTime } from "@/lib/format";
+import type { PipelineNode } from "@/lib/pipeline";
+import type { Ticket, TicketStatus } from "@/lib/types";
+import { isDraggable, type CardLive } from "./board-model";
 
-export function TicketCard({ ticket }: { ticket: Ticket }) {
-  const start = useStartTicket();
-  const scope = fileScopeHint(ticket.fileScope);
+type Props = {
+  ticket: Ticket;
+  nodes: PipelineNode[];
+  live: CardLive;
+  now: number;
+  fresh: boolean;
+  onOpen: (id: string) => void;
+  onStart: (t: Ticket) => void;
+  onCancel: (t: Ticket) => void;
+};
+
+/** How long the ticket has been where it is, in the words of its column. */
+function timeHint(ticket: Ticket, live: CardLive, now: number): string {
+  if (live.running?.startedAt) return duration(live.running.startedAt, null, now);
+  const since = relativeTime(ticket.updatedAt, now);
+  if (ticket.status === "awaiting_board") return `waiting ${since.replace(/ ago$/, "")}`;
+  return since;
+}
+
+export const TicketCard = memo(function TicketCard({ ticket, nodes, live, now, fresh, onOpen, onStart, onCancel }: Props) {
+  const status = ticket.status as TicketStatus;
+  const draggable = isDraggable(status);
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: ticket.id, data: { ticket }, disabled: !draggable });
+  const acCount = ticket.acceptanceCriteria.length;
+  const working = live.active;
+
   return (
-    <article className="group/card relative flex flex-col gap-1.5 rounded-md border bg-card p-2.5 text-card-foreground transition-colors hover:border-ring/60 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring">
-      <div className="flex items-center justify-between gap-2">
-        <TicketTypeBadge type={ticket.type} />
-        {ticket.stage ? <span className="truncate text-xs text-muted-foreground">{ticket.stage}</span> : null}
+    <article
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      // The title button is the focus target; keyboard users move tickets from the menu.
+      tabIndex={-1}
+      role={undefined}
+      aria-roledescription={undefined}
+      aria-labelledby={`card-${ticket.id}`}
+      className={cn(
+        "group/card relative flex touch-manipulation flex-col gap-2 rounded-lg border bg-card p-2.5 text-card-foreground shadow-xs transition-[border-color,box-shadow,opacity]",
+        "hover:border-ring/50 has-[button[data-open]:focus-visible]:ring-2 has-[button[data-open]:focus-visible]:ring-ring",
+        draggable && "cursor-grab active:cursor-grabbing",
+        working && "border-l-2",
+        working && roleBorder(working.role),
+        status === "awaiting_board" && "border-board/50",
+        isDragging && "opacity-40",
+        fresh && "motion-safe:animate-arrive",
+      )}
+    >
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="rounded-sm bg-secondary px-1.5 py-px font-medium text-secondary-foreground">{ticket.type}</span>
+        {ticket.prUrl ? (
+          <span className="inline-flex items-center gap-0.5" title="Pull request open">
+            <GitPullRequestIcon aria-hidden className="size-3.5" />
+            <span className="sr-only">Pull request open</span>
+          </span>
+        ) : null}
+        <span className="ml-auto tabular-nums">{timeHint(ticket, live, now)}</span>
+        <CardMenu ticket={ticket} onStart={onStart} onCancel={onCancel} />
       </div>
-      <h3 className="text-sm leading-snug font-medium">
-        <Link to={`/tickets/${ticket.id}`} className="outline-none after:absolute after:inset-0">
+      <h3 id={`card-${ticket.id}`} className="text-sm leading-snug font-medium">
+        <button type="button" data-open onClick={() => onOpen(ticket.id)} className="text-left outline-none after:absolute after:inset-0 after:rounded-lg">
           {ticket.title}
-        </Link>
+        </button>
       </h3>
-      {scope ? (
-        <p className="truncate font-mono text-xs text-muted-foreground" title={ticket.fileScope.join("\n")}>
-          {scope}
-        </p>
-      ) : null}
-      {ticket.status === "backlog" ? (
-        <Button
-          size="xs"
-          variant="outline"
-          className="relative z-10 self-start"
-          disabled={start.isPending}
-          onClick={() =>
-            start.mutate(ticket.id, {
-              onSuccess: () => toast.success(`Started “${ticket.title}”`),
-              onError: (e) => toast.error(`Could not start: ${e.message}`),
-            })
-          }
-        >
-          {start.isPending ? <Spinner data-icon="inline-start" /> : <PlayIcon data-icon="inline-start" />}
-          Start
-        </Button>
-      ) : null}
+      <div className="flex items-center gap-2">
+        <PipelineStrip nodes={nodes} className={cn(status === "backlog" && "opacity-50")} />
+        {acCount > 0 ? (
+          <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground" title={`${acCount} acceptance criteria`}>
+            <CheckCheckIcon aria-hidden className="size-3.5" />
+            <span className="tabular-nums">{acCount}</span>
+            <span className="sr-only"> acceptance criteria</span>
+          </span>
+        ) : null}
+        {working ? (
+          <span className="ml-auto flex items-center gap-1.5 text-xs">
+            <span className="text-muted-foreground">{nodes.find((n) => n.state === "running")?.stage ?? ticket.stage}</span>
+            <RoleAvatar role={working.role} size="xs" live />
+          </span>
+        ) : status === "awaiting_board" ? (
+          nodes.some((n) => n.current && (n.state === "blocked" || n.state === "fail")) ? (
+            <span className="ml-auto text-xs font-medium text-blocked">Stuck at {ticket.stage}</span>
+          ) : (
+            <span className="ml-auto text-xs font-medium text-board">Your call</span>
+          )
+        ) : status === "backlog" ? (
+          <Button size="xs" variant="ghost" className="relative z-10 ml-auto -my-1" onClick={() => onStart(ticket)}>
+            <PlayIcon data-icon="inline-start" />
+            Start
+          </Button>
+        ) : null}
+      </div>
     </article>
+  );
+});
+
+function roleBorder(role: string): string {
+  switch (role) {
+    case "planner":
+      return "border-l-role-planner";
+    case "builder":
+      return "border-l-role-builder";
+    case "verifier":
+      return "border-l-role-verifier";
+    case "reviewer":
+      return "border-l-role-reviewer";
+    default:
+      return "border-l-role-server";
+  }
+}
+
+function CardMenu({ ticket, onStart, onCancel }: { ticket: Ticket; onStart: (t: Ticket) => void; onCancel: (t: Ticket) => void }) {
+  const open = ticket.status !== "done" && ticket.status !== "cancelled";
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="relative z-10 -my-1 -mr-1 opacity-60 group-hover/card:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+          aria-label={`Actions for ${ticket.title}`}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <EllipsisIcon />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuGroup>
+          <DropdownMenuItem asChild>
+            <Link to={`/tickets/${ticket.id}`}>
+              <ExternalLinkIcon />
+              Open ticket
+            </Link>
+          </DropdownMenuItem>
+          {ticket.status === "backlog" ? (
+            <DropdownMenuItem onSelect={() => onStart(ticket)}>
+              <PlayIcon />
+              Start (move to Ready)
+            </DropdownMenuItem>
+          ) : null}
+        </DropdownMenuGroup>
+        {open ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem variant="destructive" onSelect={() => onCancel(ticket)}>
+                <XIcon />
+                Cancel ticket…
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

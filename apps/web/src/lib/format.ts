@@ -33,3 +33,13 @@ export const shortCommit = (sha?: string) => (sha ? sha.slice(0, 7) : "");
 export const shortId = (id: string) => id.replace(/^[a-z]+_/, "").slice(0, 8);
 export const percent = (v: number) => `${Math.round(v * 100)}%`;
 export const humanize = (s: string) => (s.charAt(0).toUpperCase() + s.slice(1)).replace(/_/g, " ");
+
+/** A one-glance summary: markdown markers and the verdict line (shown separately) removed. */
+export function plainSummary(md: string): string {
+  return md
+    .replace(/^\s*VERDICT:.*$/gm, "")
+    .replace(/^#+\s*/gm, "")
+    .replace(/\*\*|__|`|(?<![\w*])\*(?=\S)|(?<=\S)\*(?![\w*])/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}

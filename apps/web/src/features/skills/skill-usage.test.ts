@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Agent, SkillEntry } from "@/lib/types";
-import { cleanDescription, filterSkills, skillUsage } from "./skill-usage";
+import { cleanDescription, filterSkills, groupBySource, skillRoles, skillUsage } from "./skill-usage";
 
 const agents = [
-  { name: "Builder", skills: ["tdd", "shadcn"] },
-  { name: "Reviewer", skills: ["code-review", "tdd"] },
+  { name: "Reviewer", role: "reviewer", skills: ["code-review", "tdd"] },
+  { name: "Builder", role: "builder", skills: ["tdd", "shadcn"] },
 ] as Agent[];
 const skills: SkillEntry[] = [
   { name: "tdd", origin: "vendor", path: "x", source: "someone/skills", description: "Red, green, refactor" },
@@ -15,7 +15,7 @@ const skills: SkillEntry[] = [
 describe("skill usage", () => {
   it("lists the agents that load each skill", () => {
     const usage = skillUsage(agents);
-    expect(usage.get("tdd")).toEqual(["Builder", "Reviewer"]);
+    expect(usage.get("tdd")).toEqual(["Reviewer", "Builder"]);
     expect(usage.get("local-thing")).toBeUndefined();
   });
 
@@ -31,5 +31,20 @@ describe("skill usage", () => {
     expect(cleanDescription('"Use for \\"x\\" things"')).toBe('Use for "x" things');
     expect(cleanDescription("plain")).toBe("plain");
     expect(cleanDescription(undefined)).toBeUndefined();
+  });
+});
+
+describe("skill roles and sources", () => {
+  it("lists roles per skill in role order", () => {
+    expect(skillRoles(agents).get("tdd")).toEqual(["builder", "reviewer"]);
+  });
+
+  it("groups by source, local first, larger groups next", () => {
+    const more: SkillEntry[] = [...skills, { name: "x", origin: "vendor", path: "w", source: "someone/skills" }];
+    expect(groupBySource(more).map((g) => [g.source, g.skills.length])).toEqual([
+      ["local", 1],
+      ["someone/skills", 2],
+      ["unknown source", 1],
+    ]);
   });
 });
