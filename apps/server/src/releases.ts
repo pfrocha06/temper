@@ -94,8 +94,8 @@ export async function waitHealthy(port: number, timeoutMs = 30_000): Promise<boo
   const end = Date.now() + timeoutMs;
   while (Date.now() < end) {
     try {
-      const res = await fetch(`http://127.0.0.1:${port}/api/status`);
-      if (res.ok) return true;
+      const res = await fetch(`http://127.0.0.1:${port}/api/health`);
+      if (res.ok && ((await res.json()) as { ok?: unknown }).ok === true) return true;
     } catch {
       /* not yet */
     }
