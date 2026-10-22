@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Artifact, Ticket } from "@temper/core";
 import { buildPrompt } from "../src/prompt.ts";
+import { Factory } from "../src/factory.ts";
 import { parsePlan } from "../src/plan.ts";
 
 const ticket = {
@@ -35,5 +36,13 @@ describe("parsePlan", () => {
     const ok = '```json\n{"tickets":[{"key":"T1","type":"feature","title":"a"},{"key":"T2","type":"chore","title":"b","dependsOn":["T1"]}]}\n```\nVERDICT: PASS';
     expect(parsePlan(ok).map((t) => t.key)).toEqual(["T1", "T2"]);
     expect(() => parsePlan(ok.replace('["T1"]', '["T9"]'))).toThrow(/unknown T9/);
+  });
+});
+
+describe("decisionAsked", () => {
+  it("finds the question an agent asked", () => {
+    expect(Factory.decisionAsked("…\nVERDICT: BLOCKED\n\nDecision needed: allow local binding?")).toBe("allow local binding?");
+    expect(Factory.decisionAsked("VERDICT: BLOCKED — need a human to run pnpm install")).toBe("need a human to run pnpm install");
+    expect(Factory.decisionAsked("all good\nVERDICT: PASS")).toBeUndefined();
   });
 });

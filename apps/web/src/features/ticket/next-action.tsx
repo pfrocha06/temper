@@ -55,6 +55,11 @@ function Banner({ tone, icon: Icon, title, detail, children }: { tone: Tone; ico
   );
 }
 
+/** The question an agent asked the board, as the server puts it first in an escalation. */
+export function askedQuestion(body: string | undefined): string | undefined {
+  return body ? /\*\*Decision needed:\*\*\s*(.+)/.exec(body)?.[1]?.trim() : undefined;
+}
+
 /** The one thing to know or do about this ticket now, with the action at hand. */
 export function NextAction({ ticket, focus }: { ticket: Ticket; focus: PipelineNode | undefined }) {
   const approvals = useQuery({ ...approvalsQuery, enabled: ticket.status === "awaiting_board" });
@@ -73,7 +78,11 @@ export function NextAction({ ticket, focus }: { ticket: Ticket; focus: PipelineN
           tone={stuck ? "blocked" : "board"}
           icon={stuck ? TriangleAlertIcon : HandIcon}
           title={isMerge ? "Waiting for your merge" : stuck ? `Stuck at ${ticket.stage}` : `Waiting for your decision at ${ticket.stage}`}
-          detail={isMerge ? "Gates passed and the Reviewer found no blockers." : focus?.latest?.summary ? plainSummary(focus.latest.summary) : undefined}
+          detail={
+            isMerge
+              ? "Gates passed and the Reviewer found no blockers."
+              : (askedQuestion(approval?.body) ?? (focus?.latest?.summary ? plainSummary(focus.latest.summary) : undefined))
+          }
         >
           {ticket.prUrl ? (
             <Button asChild size="sm" variant="outline">

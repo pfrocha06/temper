@@ -28,6 +28,7 @@ describe("buildArgs", () => {
     expect(settings.autoMemoryEnabled).toBe(false);
     expect(settings.permissions.deny).toContain("Read(//holdouts/**)");
     expect(settings.sandbox.allowUnsandboxedCommands).toBe(false);
+    expect(settings.sandbox.network.allowLocalBinding).toBe(true);
   });
 });
 

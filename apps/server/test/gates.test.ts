@@ -21,6 +21,11 @@ describe("diffGuard", () => {
     expect(r.problems).toHaveLength(2);
   });
 
+  it("does not mistake an import that names expect for an assertion", () => {
+    const existingTestDiff = ['-import { describe, expect, it } from "vitest";', '+import { afterEach, describe, expect, it } from "vitest";'].join("\n");
+    expect(diffGuard({ ...base, changes: [{ status: "M", path: "apps/web/src/x.test.ts" }], existingTestDiff }).ok).toBe(true);
+  });
+
   it("rejects deleted tests", () => {
     expect(diffGuard({ ...base, changes: [{ status: "D", path: "apps/web/src/x.test.ts" }] }).ok).toBe(false);
   });

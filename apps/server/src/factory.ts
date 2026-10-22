@@ -564,7 +564,17 @@ export class Factory extends EventEmitter {
     void this.tick();
   }
 
+  /** The question an agent wants answered: its "Decision needed" line, else the text after its BLOCKED verdict. */
+  static decisionAsked(text: string): string | undefined {
+    const asked = /^\s*(?:\*\*)?(?:Decision needed|Question|Need(?:s)? (?:a )?(?:human )?decision)[^:\n]*:(?:\*\*)?\s*(.+)$/im.exec(text)?.[1];
+    if (asked) return asked.trim();
+    const after = /VERDICT:\s*BLOCKED\s*[—:-]?\s*(.+)$/im.exec(text)?.[1];
+    return after?.trim() || undefined;
+  }
+
   private async escalate(ticket: Ticket, stageId: string, body: string, decision = false): Promise<void> {
+    const asked = Factory.decisionAsked(body);
+    if (asked) body = `**Decision needed:** ${asked}\n\n${body}`;
     await updateTicket(this.db, ticket.id, { status: "awaiting_board", stage: stageId });
     await requestApproval(this.db, {
       kind: decision ? "decision" : "escalation",

@@ -23,7 +23,13 @@ export function runSettings(req: Pick<RunRequest, "denyDirs">): Record<string, u
     autoMemoryEnabled: false,
     permissions: { deny },
     sandbox: req.denyDirs?.length
-      ? { enabled: true, allowUnsandboxedCommands: false, filesystem: { denyRead: req.denyDirs } }
+      ? {
+          enabled: true,
+          allowUnsandboxedCommands: false,
+          filesystem: { denyRead: req.denyDirs },
+          // Tests commonly start stub servers on 127.0.0.1; outbound network stays blocked.
+          network: { allowLocalBinding: true },
+        }
       : undefined,
   };
 }
