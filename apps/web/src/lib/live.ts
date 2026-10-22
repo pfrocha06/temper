@@ -21,6 +21,14 @@ export function rootsForAudit(kind: string): KeyRoot[] {
       return ["temperature", "status"];
     case "project":
       return ["projects"];
+    case "environment":
+      return ["environments", "projects"];
+    case "knowledge":
+      return ["knowledge"];
+    case "chat":
+      return ["chats"];
+    case "digest":
+      return ["dispatches", "dispatch", "ticket"];
     default:
       return [];
   }

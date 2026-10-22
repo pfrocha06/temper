@@ -8,6 +8,9 @@ describe("rootsForAudit", () => {
     expect(rootsForAudit("signal.escaped_bug")).toEqual(["temperature", "status"]);
     expect(rootsForAudit("factory.paused")).toEqual(["status"]);
     expect(rootsForAudit("agent.saved")).toContain("agents");
+    expect(rootsForAudit("knowledge.added")).toEqual(["knowledge"]);
+    expect(rootsForAudit("chat.started")).toEqual(["chats"]);
+    expect(rootsForAudit("environment.created")).toEqual(["environments", "projects"]);
   });
 
   it("ignores kinds nothing on screen depends on", () => {

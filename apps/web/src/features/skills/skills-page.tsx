@@ -14,7 +14,7 @@ import { agentsQuery, skillsQuery } from "@/lib/queries";
 import type { SkillEntry } from "@/lib/types";
 import { cleanDescription, filterSkills, groupBySource, skillRoles, skillUsage, sourceOf } from "./skill-usage";
 
-const ROLES = ["planner", "builder", "verifier", "reviewer"];
+const ROLES = ["chief", "builder", "verifier", "reviewer"];
 const UNUSED = "unused";
 
 export function SkillsPage() {

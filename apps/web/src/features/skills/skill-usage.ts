@@ -28,7 +28,7 @@ export function filterSkills(skills: SkillEntry[], query: string, usage: Map<str
 
 /** Skill name → roles of the agents that load it, in role order. */
 export function skillRoles(agents: Agent[]): Map<string, string[]> {
-  const order = ["planner", "builder", "verifier", "reviewer"];
+  const order = ["chief", "builder", "verifier", "reviewer"];
   const roles = new Map<string, string[]>();
   for (const a of agents.toSorted((x, y) => order.indexOf(x.role) - order.indexOf(y.role))) {
     for (const s of a.skills) {

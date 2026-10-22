@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
+import { probeAuth } from "@/lib/auth";
 import { dispatchEventsQuery } from "@/lib/queries";
 import { mergeEvents } from "@/lib/run-events";
 import type { DispatchEvent } from "@/lib/types";
@@ -27,7 +28,11 @@ export function useRunEvents(dispatchId: string, running: boolean) {
       setStreaming(true);
       void qc.invalidateQueries({ queryKey: query.queryKey });
     };
-    source.onerror = () => setStreaming(false);
+    source.onerror = () => {
+      setStreaming(false);
+      // Closed for good (e.g. a 401): find out whether to show the sign-in screen.
+      if (source.readyState === EventSource.CLOSED) void probeAuth();
+    };
     source.addEventListener("dispatch_event", (e) => {
       try {
         const event = JSON.parse((e as MessageEvent<string>).data) as DispatchEvent;

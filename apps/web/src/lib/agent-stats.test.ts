@@ -27,6 +27,6 @@ describe("agentStats", () => {
     );
     expect(s.get("builder")).toEqual({ runs: 3, running: 1, runsLastHour: 2, passRate: 0.5, avgMs: 60_000, recent: ["BLOCKED", "PASS"] });
     expect(s.get("reviewer")?.passRate).toBe(1);
-    expect(s.get("planner")).toBeUndefined();
+    expect(s.get("chief")).toBeUndefined();
   });
 });

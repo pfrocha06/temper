@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeftIcon, GitBranchIcon, GitPullRequestIcon } from "lucide-react";
+import { ArrowLeftIcon, ArrowUpRightIcon, GitBranchIcon, GitPullRequestIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
 import { cn } from "cn";
@@ -7,6 +7,7 @@ import { AcChecklist, RegressionCount } from "@/components/evidence";
 import { Markdown } from "@/components/markdown";
 import { Pipeline } from "@/components/pipeline";
 import { QueryError, RowsSkeleton } from "@/components/query-state";
+import { RoleAvatar } from "@/components/role";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
@@ -15,7 +16,8 @@ import { relativeTime } from "@/lib/format";
 import { acceptanceStatus } from "@/lib/gates";
 import { derivePipeline, focusNode } from "@/lib/pipeline";
 import { ticketQuery } from "@/lib/queries";
-import type { Ticket, TicketStatus } from "@/lib/types";
+import type { Dispatch, Ticket, TicketStatus } from "@/lib/types";
+import { isDigest } from "@/lib/workflows";
 import { ArtifactTabs } from "./artifact-tabs";
 import { NextAction } from "./next-action";
 import { StagePanel } from "./stage-panel";
@@ -54,6 +56,7 @@ export function TicketPage() {
   }
 
   const { ticket, artifacts } = data;
+  const digest = data.dispatches.filter(isDigest).at(-1);
   const focus = focusNode(nodes);
   const shown = nodes.find((n) => n.stage === selected) ?? focus;
 
@@ -92,6 +95,7 @@ export function TicketPage() {
             </section>
           </div>
           <aside className="flex flex-col gap-6">
+            {digest ? <DigestNote dispatch={digest} /> : null}
             <section aria-labelledby="scope-h">
               <h2 id="scope-h" className="mb-2 text-sm font-semibold">
                 File scope
@@ -211,5 +215,33 @@ function TicketHeader({ ticket }: { ticket: Ticket }) {
         </div>
       </div>
     </header>
+  );
+}
+
+/**
+ * After a ticket is done the Chief of Staff reads its reports and curates knowledge. That run is
+ * not a stage of the workflow, so it shows here rather than in the pipeline.
+ */
+function DigestNote({ dispatch: d }: { dispatch: Dispatch }) {
+  const running = d.status === "running" || d.status === "queued";
+  const failed = d.status === "failed";
+  return (
+    <section aria-labelledby="digest-h" className="flex flex-col gap-1.5 rounded-lg border border-role-chief/25 bg-role-chief/5 p-3">
+      <h2 id="digest-h" className="flex items-center gap-2 text-sm font-semibold">
+        <RoleAvatar role="chief" size="xs" live={running} tooltip={false} />
+        Knowledge digest
+      </h2>
+      <p className="text-xs leading-5 text-muted-foreground">
+        {running
+          ? "The Chief of Staff is reading what this ticket taught and updating shared knowledge."
+          : failed
+            ? "The Chief of Staff could not finish digesting this ticket."
+            : `The Chief of Staff digested this ticket ${d.finishedAt ? relativeTime(d.finishedAt) : ""} and curated shared knowledge.`}
+      </p>
+      <Link to={`/runs/${d.id}`} className="flex items-center gap-1 self-start text-xs font-medium text-primary hover:underline">
+        Open the digest run
+        <ArrowUpRightIcon aria-hidden className="size-3" />
+      </Link>
+    </section>
   );
 }

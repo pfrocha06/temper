@@ -5,6 +5,7 @@ export type AgentFormValues = {
   name: string;
   model: string;
   skills: string[];
+  mcpServers: string[];
   allowedTools: string;
   disallowedTools: string;
   maxConcurrency: string;
@@ -17,6 +18,7 @@ export function toFormValues(a: Agent): AgentFormValues {
     name: a.name,
     model: a.model ?? "",
     skills: a.skills,
+    mcpServers: a.mcpServers ?? [],
     allowedTools: a.permissions.allowedTools.join("\n"),
     disallowedTools: a.permissions.disallowedTools.join("\n"),
     maxConcurrency: String(a.maxConcurrency),
@@ -48,6 +50,7 @@ export function toAgentEdit(v: AgentFormValues): { edit?: AgentEdit; errors: For
       name: v.name.trim(),
       model: v.model.trim() || null,
       skills: v.skills,
+      mcpServers: v.mcpServers,
       permissions: { allowedTools: parseLines(v.allowedTools), disallowedTools: parseLines(v.disallowedTools) },
       maxConcurrency,
       runsPerHour,

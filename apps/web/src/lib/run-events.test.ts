@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeEvents, summarizeToolInput, toRunLine } from "./run-events";
+import { foldGateSteps, mergeEvents, summarizeToolInput, toRunLine } from "./run-events";
 import type { DispatchEvent } from "./types";
 
 const at = "2026-10-22T10:00:00.000Z";
@@ -57,5 +57,28 @@ describe("mergeEvents", () => {
     const history = [ev(1, { kind: "text", text: "a" }), ev(2, { kind: "text", text: "b" })];
     const live = [ev(3, { kind: "text", text: "c" }), ev(2, { kind: "text", text: "b" })];
     expect(mergeEvents(history, live).map((e) => e.id)).toEqual([1, 2, 3]);
+  });
+});
+
+describe("foldGateSteps", () => {
+  it("folds a gate check's start, streamed output and outcome into one step", () => {
+    const lines = [
+      ev(1, { kind: "tool_use", tool: "gate:builder_tests", input: { command: "pnpm check" } }),
+      ev(2, { kind: "text", text: "running" }),
+      ev(3, { kind: "text", text: "12 passed" }),
+      ev(4, { kind: "tool_result", isError: false, content: "PASS in 2m 3s — ok" }),
+      ev(5, { kind: "tool_use", tool: "gate:diff_guard", input: { command: "diff guard" } }),
+      ev(6, { kind: "result", text: "report", isError: false }),
+    ].map(toRunLine);
+    const folded = foldGateSteps(lines);
+    expect(folded.map((l) => l.kind)).toEqual(["gate", "gate", "result"]);
+    expect(folded[0]).toMatchObject({ check: "builder_tests", command: "pnpm check", output: "running\n12 passed", outcome: { isError: false, text: "PASS in 2m 3s — ok" } });
+    expect(folded[1]).toMatchObject({ check: "diff_guard", output: "" });
+    expect(folded[1]).not.toHaveProperty("outcome");
+  });
+
+  it("leaves agent events alone", () => {
+    const lines = [ev(1, { kind: "tool_use", tool: "Bash", input: { command: "ls" } }), ev(2, { kind: "text", text: "hi" })].map(toRunLine);
+    expect(foldGateSteps(lines)).toEqual(lines);
   });
 });

@@ -115,8 +115,8 @@ export const TicketCard = memo(function TicketCard({ ticket, nodes, live, now, f
 
 function roleBorder(role: string): string {
   switch (role) {
-    case "planner":
-      return "border-l-role-planner";
+    case "chief":
+      return "border-l-role-chief";
     case "builder":
       return "border-l-role-builder";
     case "verifier":

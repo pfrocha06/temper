@@ -10,7 +10,39 @@ export type RunLine =
   | { id: number; at: string; kind: "stderr"; text: string }
   | { id: number; at: string; kind: "result"; isError: boolean; text: string; meta: string }
   | { id: number; at: string; kind: "init"; text: string }
-  | { id: number; at: string; kind: "rate_limited"; text: string };
+  | { id: number; at: string; kind: "rate_limited"; text: string }
+  /** A server gate check folded from its events: started, streamed output, outcome. */
+  | { id: number; at: string; kind: "gate"; check: string; command: string; output: string; outcome?: { isError: boolean; text: string; at: string } };
+
+const GATE_PREFIX = "gate:";
+
+/**
+ * Folds server gate progress into one step per check: a `gate:<check>` tool use opens
+ * a step, the text events after it are its streamed output, and its tool result closes it.
+ * Everything else passes through unchanged.
+ */
+export function foldGateSteps(lines: RunLine[]): RunLine[] {
+  const out: RunLine[] = [];
+  let open: Extract<RunLine, { kind: "gate" }> | undefined;
+  for (const l of lines) {
+    if (l.kind === "tool_use" && l.tool.startsWith(GATE_PREFIX)) {
+      open = { id: l.id, at: l.at, kind: "gate", check: l.tool.slice(GATE_PREFIX.length), command: l.summary, output: "" };
+      out.push(open);
+      continue;
+    }
+    if (open && l.kind === "text") {
+      open.output = open.output ? `${open.output}\n${l.text}` : l.text;
+      continue;
+    }
+    if (open && l.kind === "tool_result") {
+      open.outcome = { isError: l.isError, text: l.content, at: l.at };
+      open = undefined;
+      continue;
+    }
+    out.push(l);
+  }
+  return out;
+}
 
 const PREFERRED_KEYS = ["command", "file_path", "path", "pattern", "url", "query", "description", "prompt"];
 
