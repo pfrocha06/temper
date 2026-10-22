@@ -4,6 +4,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { cn } from "cn";
 import { Pipeline } from "@/components/pipeline";
+import { AgentProviderLogo } from "@/components/provider-logo";
 import { QueryError, RowsSkeleton } from "@/components/query-state";
 import { RoleAvatar, roleMeta } from "@/components/role";
 import { Toggle } from "@/components/ui/toggle";
@@ -67,6 +68,7 @@ export function RunViewer({ dispatch, ticket }: { dispatch: Dispatch; ticket: Ti
               {dispatch.startedAt ? (
                 <span className="text-xs font-normal text-muted-foreground tabular-nums">{duration(dispatch.startedAt, dispatch.finishedAt, now)}</span>
               ) : null}
+              <AgentProviderLogo agentId={dispatch.agentId} size="sm" tooltip className="self-center text-muted-foreground" />
             </h2>
             {ticket ? (
               <Link to={`/tickets/${ticket.id}`} className="truncate text-sm text-muted-foreground hover:text-foreground hover:underline">

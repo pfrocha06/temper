@@ -16,11 +16,11 @@ import { Kbd } from "@/components/ui/kbd";
 import { Spinner } from "@/components/ui/spinner";
 import { post } from "@/lib/api";
 import { humanize } from "@/lib/format";
-import { keys } from "@/lib/queries";
+import { forgetResolved, keys, rememberResolved } from "@/lib/queries";
 import type { Approval, FactoryStatus } from "@/lib/types";
 
-const POSITIVE = new Set(["approve", "accept", "merge", "deploy", "promote"]);
-const NEGATIVE = new Set(["reject", "cancel", "revert"]);
+const POSITIVE = new Set(["approve", "accept", "merge", "deploy", "promote", "confirm"]);
+const NEGATIVE = new Set(["reject", "cancel", "revert", "decline"]);
 
 function optionVariant(option: string): "default" | "outline" | "destructive" {
   if (POSITIVE.has(option)) return "default";
@@ -48,18 +48,24 @@ export function useResolve() {
   return useMutation({
     mutationFn: ({ approval, resolution, note }: { approval: Approval; resolution: string; note?: string }) =>
       post<Approval>(`/approvals/${encodeURIComponent(approval.id)}/resolve`, { resolution, note }),
-    onMutate: async ({ approval }) => {
+    onMutate: async ({ approval, resolution }) => {
       await qc.cancelQueries({ queryKey: keys.approvals });
+      if (approval.kind === "proposal") rememberResolved(qc, { ...approval, status: "resolved", resolution, resolvedAt: new Date().toISOString() });
       const before = qc.getQueryData<Approval[]>(keys.approvals);
       qc.setQueryData<Approval[]>(keys.approvals, (list) => list?.filter((a) => a.id !== approval.id));
       qc.setQueryData<FactoryStatus>(keys.status, (s) => (s ? { ...s, pendingApprovals: Math.max(0, s.pendingApprovals - 1) } : s));
       return { before };
     },
-    onError: (e, { resolution }, ctx) => {
+    onError: (e, { approval, resolution }, ctx) => {
       if (ctx?.before) qc.setQueryData(keys.approvals, ctx.before);
+      if (approval.kind === "proposal") forgetResolved(qc, approval.id);
       toast.error(`Could not ${resolution}: ${e.message}`);
     },
-    onSuccess: (_r, { approval, resolution }) => toast.success(`${humanize(resolution)}: ${approval.title}`),
+    onSuccess: (resolved, { approval, resolution }) => {
+      // Pending approvals are all the list endpoint returns; keep resolved proposals for their conversation.
+      if (resolved?.kind === "proposal") rememberResolved(qc, resolved);
+      toast.success(`${humanize(resolution)}: ${approval.title}`);
+    },
     onSettled: () => Promise.all([keys.approvals, keys.status, keys.tickets, ["ticket"]].map((queryKey) => qc.invalidateQueries({ queryKey }))),
   });
 }

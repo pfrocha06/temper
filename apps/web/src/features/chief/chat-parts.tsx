@@ -1,6 +1,14 @@
 import {
   ArchiveIcon,
   BookOpenIcon,
+  FolderPlusIcon,
+  GavelIcon,
+  InboxIcon,
+  PauseIcon,
+  PlayIcon,
+  RefreshCwIcon,
+  RocketIcon,
+  BanIcon,
   BookPlusIcon,
   FolderKanbanIcon,
   ListTodoIcon,
@@ -16,6 +24,7 @@ import { memo } from "react";
 import { Link } from "react-router";
 import { cn } from "cn";
 import { Markdown } from "@/components/markdown";
+import { AgentProviderLogo } from "@/components/provider-logo";
 import { RoleAvatar } from "@/components/role";
 import { Spinner } from "@/components/ui/spinner";
 import { absoluteTime, clockTime } from "@/lib/format";
@@ -31,6 +40,16 @@ const ACTION_ICON: Record<string, LucideIcon> = {
   projects_list: FolderKanbanIcon,
   tickets_list: ListTodoIcon,
   ticket_create: TicketPlusIcon,
+  ticket_start: PlayIcon,
+  ticket_cancel: BanIcon,
+  ticket_retry: RefreshCwIcon,
+  ticket_digest: BookOpenIcon,
+  factory_pause: PauseIcon,
+  factory_resume: PlayIcon,
+  project_register: FolderPlusIcon,
+  approvals_list: InboxIcon,
+  propose_decision: GavelIcon,
+  propose_deploy: RocketIcon,
 };
 
 /**
@@ -98,8 +117,9 @@ export const MessageView = memo(function MessageView({ message, pending = false 
     <li className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3">
       <RoleAvatar role="chief" size="md" tooltip={false} />
       <div className="flex min-w-0 flex-col gap-2 pt-1">
-        <p className="flex items-baseline gap-2 text-xs">
+        <p className="flex items-center gap-2 text-xs">
           <span className="font-medium text-role-chief">Chief of Staff</span>
+          <AgentProviderLogo agentId="chief" size="xs" tooltip className="text-muted-foreground" />
           <time dateTime={message.at} title={absoluteTime(message.at)} className="text-muted-foreground tabular-nums">
             {clockTime(message.at).slice(0, 5)}
           </time>

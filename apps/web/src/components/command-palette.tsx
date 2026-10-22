@@ -10,7 +10,7 @@ import { useProject } from "@/hooks/use-project";
 import { STATUS_LABEL } from "@/lib/constants";
 import { chatsQuery, knowledgeQuery, statusQuery, ticketsQuery, useSetPaused } from "@/lib/queries";
 import type { TicketStatus } from "@/lib/types";
-import { NAV } from "./shell/nav-rail";
+import { NAV, SETTINGS, SETTINGS_PAGES } from "./shell/nav-rail";
 
 /** ⌘K / Ctrl+K: jump to a screen, conversation, knowledge entry or ticket, or run an action. */
 export function CommandPalette() {
@@ -95,6 +95,15 @@ export function CommandPalette() {
                 <n.icon />
                 {n.label}
                 <CommandShortcut>G {n.key.toUpperCase()}</CommandShortcut>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+          <CommandGroup heading="Settings">
+            {SETTINGS_PAGES.map((p, i) => (
+              <CommandItem key={p.to} value={`settings ${p.label} ${p.description}`} onSelect={run(() => navigate(p.to))}>
+                <p.icon />
+                <span className="truncate">Settings: {p.label}</span>
+                {i === 0 ? <CommandShortcut className="whitespace-nowrap">G {SETTINGS.key}</CommandShortcut> : null}
               </CommandItem>
             ))}
           </CommandGroup>

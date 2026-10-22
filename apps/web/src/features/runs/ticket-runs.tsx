@@ -3,6 +3,7 @@ import { useMemo, useState, type KeyboardEvent } from "react";
 import { Link } from "react-router";
 import { cn } from "cn";
 import { PipelineStrip } from "@/components/pipeline";
+import { AgentProviderLogo } from "@/components/provider-logo";
 import { RoleAvatar } from "@/components/role";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useArrivals } from "@/hooks/use-arrivals";
@@ -125,7 +126,10 @@ function TicketRow({ group, ticket, selectedId, now, fresh }: { group: TicketRun
               {head.stage}
               {head.attempt > 1 ? ` #${head.attempt}` : ""}
             </span>
-            <span className={cn("ml-auto shrink-0 font-mono font-medium", statusTone(head))}>{statusWord(head)}</span>
+            <span className="ml-auto flex shrink-0 items-center gap-1.5">
+              <AgentProviderLogo agentId={head.agentId} size="xs" className="text-muted-foreground" />
+              <span className={cn("font-mono font-medium", statusTone(head))}>{statusWord(head)}</span>
+            </span>
           </span>
         </Link>
         <button
@@ -167,9 +171,12 @@ function AttemptRow({ dispatch: d, selected, now }: { dispatch: Dispatch; select
         )}
       >
         <RoleAvatar role={d.agentId} size="xs" live={live} tooltip={false} />
-        <span className="truncate">
-          {d.stage}
-          {d.attempt > 1 ? <span className="text-muted-foreground"> #{d.attempt}</span> : null}
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate">
+            {d.stage}
+            {d.attempt > 1 ? <span className="text-muted-foreground"> #{d.attempt}</span> : null}
+          </span>
+          <AgentProviderLogo agentId={d.agentId} size="xs" className="text-muted-foreground" />
         </span>
         <span className={cn("font-mono", statusTone(d))}>{statusWord(d)}</span>
         <span className="text-right text-muted-foreground tabular-nums">{d.startedAt ? duration(d.startedAt, d.finishedAt, now) : "queued"}</span>

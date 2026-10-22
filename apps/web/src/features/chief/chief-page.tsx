@@ -1,6 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeftIcon, MessageSquarePlusIcon } from "lucide-react";
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 import { cn } from "cn";
@@ -12,8 +12,10 @@ import { useNow } from "@/hooks/use-now";
 import { ApiError } from "@/lib/api";
 import { chatTitle, thinkingItems } from "@/lib/chat";
 import { relativeTime } from "@/lib/format";
-import { chatQuery, chatsQuery, useSendChatMessage, useStartChat } from "@/lib/queries";
+import { placeProposals } from "@/lib/proposals";
+import { approvalsQuery, chatQuery, chatsQuery, resolvedProposalsQuery, useSendChatMessage, useStartChat } from "@/lib/queries";
 import type { Chat } from "@/lib/types";
+import { ProposalCard } from "@/features/inbox/proposal-card";
 import { MessageView, ThinkingView } from "./chat-parts";
 import { Composer, type ComposerHandle } from "./composer";
 import { useChatStream } from "./use-chat-stream";
@@ -167,6 +169,18 @@ function ChatThread({ chatId }: { chatId: string }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [follow, setFollow] = useState(true);
   const messages = detail.data?.messages;
+  const proposals = useChatProposals(chatId);
+  const placed = useMemo(() => placeProposals(messages ?? [], proposals), [messages, proposals]);
+  const byId = useMemo(() => new Map(proposals.map((p) => [p.id, p])), [proposals]);
+  const proposalItems = (ids: string[] | undefined) =>
+    ids?.map((id) => {
+      const p = byId.get(id);
+      return p ? (
+        <li key={`prop-${id}`} className="ml-11 max-w-xl">
+          <ProposalCard proposal={p} context="chat" />
+        </li>
+      ) : null;
+    });
 
   useLayoutEffect(() => {
     const el = scroller.current;
@@ -226,12 +240,16 @@ function ChatThread({ chatId }: { chatId: string }) {
         ) : (
           <ol aria-label="Messages" className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-6 md:px-6">
             {messages.map((m) => (
-              <MessageView key={m.id} message={m} />
+              <Fragment key={m.id}>
+                <MessageView message={m} />
+                {proposalItems(placed.after.get(m.id))}
+              </Fragment>
             ))}
             {send.isPending && send.variables ? (
               <MessageView pending message={{ author: "board", content: send.variables.message, actions: [], at: new Date().toISOString() }} />
             ) : null}
             {showLive ? <ThinkingView items={items} thinking={thinking} /> : null}
+            {proposalItems(placed.trailing)}
           </ol>
         )}
       </div>
@@ -247,6 +265,19 @@ function ChatThread({ chatId }: { chatId: string }) {
       </div>
     </>
   );
+}
+
+/** This conversation's proposals: pending ones from the Inbox list, plus those resolved this session. */
+function useChatProposals(chatId: string) {
+  const qc = useQueryClient();
+  const pending = useQuery(approvalsQuery).data;
+  const resolved = useQuery(resolvedProposalsQuery(qc)).data;
+  return useMemo(() => {
+    const byId = new Map<string, NonNullable<typeof pending>[number]>();
+    for (const a of pending ?? []) if (a.kind === "proposal" && a.chatId === chatId) byId.set(a.id, a);
+    for (const a of resolved ?? []) if (a.chatId === chatId) byId.set(a.id, a);
+    return [...byId.values()];
+  }, [pending, resolved, chatId]);
 }
 
 function BackToList() {

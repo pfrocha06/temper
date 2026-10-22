@@ -2,10 +2,12 @@ import {
   BotIcon,
   CheckIcon,
   ChevronRightIcon,
+  CoinsIcon,
   CornerDownRightIcon,
   FileTextIcon,
   FlagIcon,
   FolderSearchIcon,
+  GaugeIcon,
   GlobeIcon,
   HourglassIcon,
   ListChecksIcon,
@@ -26,6 +28,7 @@ import { Markdown } from "@/components/markdown";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useNow } from "@/hooks/use-now";
 import { clockTime, duration, humanize } from "@/lib/format";
+import { limitLabel, limitTone, resetClock } from "@/lib/providers";
 import type { RunLine } from "@/lib/run-events";
 
 const TOOL_ICON: Record<string, LucideIcon> = {
@@ -70,8 +73,15 @@ function iconFor(line: RunLine): { icon: LucideIcon; tone: string } {
       return { icon: PlugZapIcon, tone: "text-muted-foreground" };
     case "rate_limited":
       return { icon: HourglassIcon, tone: "text-blocked" };
+    case "usage":
+      return { icon: CoinsIcon, tone: "text-muted-foreground" };
+    case "rate_limit":
+      return { icon: GaugeIcon, tone: LIMIT_TONE[limitTone(line.status)] };
   }
 }
+
+const LIMIT_TONE = { pass: "text-muted-foreground", blocked: "text-blocked", fail: "text-fail", muted: "text-muted-foreground" } as const;
+const STATUS_TONE = { pass: "text-pass", blocked: "text-blocked", fail: "text-fail", muted: "text-muted-foreground" } as const;
 
 /** One event of a run on the timeline: time, an icon on the rail, and the event read as prose. */
 export const RunLineView = memo(function RunLineView({
@@ -91,7 +101,7 @@ export const RunLineView = memo(function RunLineView({
 }) {
   const spinning = line.kind === "gate" && !line.outcome && running;
   const { icon: Icon, tone } = spinning ? { icon: Loader2Icon, tone: "text-foreground [&>svg]:animate-spin" } : iconFor(line);
-  const minor = line.kind === "tool_result";
+  const minor = line.kind === "tool_result" || line.kind === "usage" || line.kind === "rate_limit";
   return (
     <li className="group/line relative grid grid-cols-[1.75rem_minmax(0,1fr)] gap-x-2 px-3 sm:grid-cols-[3.75rem_1.75rem_minmax(0,1fr)] [content-visibility:auto] [contain-intrinsic-size:auto_2rem] md:px-4">
       <time
@@ -258,5 +268,43 @@ function LineBody({ line, gate }: { line: Exclude<RunLine, GateLine>; gate: bool
       return <p className="font-mono text-xs leading-5 text-muted-foreground">{line.text}</p>;
     case "rate_limited":
       return <p className="text-sm text-blocked">Rate limited: {line.text}</p>;
+    case "usage":
+      return (
+        <p className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs leading-5 text-muted-foreground">
+          {line.total ? (
+            <span>
+              <span className="font-medium text-foreground/80 tabular-nums">{line.total}</span> tokens
+            </span>
+          ) : (
+            <span>Usage</span>
+          )}
+          {line.models.map((m) => (
+            <span key={m.model} className="tabular-nums">
+              <span className="font-mono">{m.model}</span> {m.text}
+            </span>
+          ))}
+          {line.cost ? (
+            <span className="tabular-nums" title="What these tokens would cost at API list prices. Subscriptions are not billed per token.">
+              ≈ {line.cost} list price
+            </span>
+          ) : null}
+          {line.apiTime ? <span className="tabular-nums">{line.apiTime} API time</span> : null}
+        </p>
+      );
+    case "rate_limit":
+      return (
+        <p className="flex min-w-0 flex-wrap items-baseline gap-x-2 text-xs leading-5 text-muted-foreground">
+          <span>Limit</span>
+          <span className="text-foreground/80" title={line.limitType}>
+            {limitLabel(line.limitType)}
+          </span>
+          <span className={cn("font-mono font-medium", STATUS_TONE[limitTone(line.status)])}>{line.status}</span>
+          {line.resetsAt ? (
+            <span className="tabular-nums" title={new Date(line.resetsAt).toLocaleString()}>
+              resets {resetClock(line.resetsAt, Date.parse(line.at))}
+            </span>
+          ) : null}
+        </p>
+      );
   }
 }

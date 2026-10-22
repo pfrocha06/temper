@@ -3,8 +3,10 @@ import { CheckIcon, CircleAlertIcon, CircleDashedIcon, GitPullRequestIcon, KeyRo
 import { Link } from "react-router";
 import { cn } from "cn";
 import { PageHeader, QueryError, RowsSkeleton } from "@/components/query-state";
+import { ProviderLogo } from "@/components/provider-logo";
 import { RoleAvatar, roleMeta } from "@/components/role";
 import { Badge } from "@/components/ui/badge";
+import { vendorOfAdapter } from "@/lib/providers";
 import { toolsQuery } from "@/lib/queries";
 import type { ToolStatus, ToolsInventory } from "@/lib/types";
 
@@ -79,6 +81,7 @@ function Adapters({ adapters }: { adapters: ToolsInventory["adapters"] }) {
         {adapters.map((a) => (
           <li key={a.id} className="flex flex-col gap-1.5 rounded-lg border bg-card p-3">
             <div className="flex flex-wrap items-center gap-2">
+              <ProviderLogo vendor={vendorOfAdapter(a.id)} size="sm" label={false} />
               <span className="font-mono text-sm font-medium">{a.id}</span>
               <StatusBadge status={a.status} />
               {a.version ? <span className="font-mono text-xs text-muted-foreground">{a.version}</span> : null}
