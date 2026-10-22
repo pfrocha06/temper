@@ -166,4 +166,3 @@ The first self-built epic after v0: planted-defect trials, so the temperature ha
 
 - A single model vendor for every role weakens separation of powers; the Thermostat flags it.
 - Vendor terms for always-on headless subscription use should be checked before relying on it.
-- Licensing and use outside the hosting organisation are undecided.
