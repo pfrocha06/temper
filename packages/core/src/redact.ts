@@ -20,11 +20,20 @@ const assignment =
 
 const bearer = /\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/g;
 
+// Words that follow "secret_scan:" or "token:" in prose and status lines, never secrets themselves.
+const NOT_SECRETS = /^(pass|fail|failed|passed|blocked|ok|clean|true|false|null|none|undefined|required|optional|redacted|\[redacted\])$/i;
+
+function looksLikeValue(value: string): boolean {
+  return !NOT_SECRETS.test(value);
+}
+
 export function redactText(text: string): string {
   let out = text;
   for (const re of tokenPatterns) out = out.replace(re, REDACTED);
   out = out.replace(bearer, (_m, scheme: string) => `${scheme} ${REDACTED}`);
-  out = out.replace(assignment, (_m, q: string, key: string, sep: string, vq: string) => `${q}${key}${q}${sep}${vq}${REDACTED}${vq}`);
+  out = out.replace(assignment, (m, q: string, key: string, sep: string, vq: string, value: string) =>
+    looksLikeValue(value) ? `${q}${key}${q}${sep}${vq}${REDACTED}${vq}` : m,
+  );
   return out;
 }
 

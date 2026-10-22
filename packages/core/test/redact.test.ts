@@ -20,6 +20,8 @@ describe("redactText", () => {
 
   it("leaves ordinary text alone", () => {
     expect(redactText("ran 12 tests in 3s")).toBe("ran 12 tests in 3s");
+    expect(redactText("## secret_scan: PASS")).toBe("## secret_scan: PASS");
+    expect(redactText("token: required")).toBe("token: required");
   });
 });
 
