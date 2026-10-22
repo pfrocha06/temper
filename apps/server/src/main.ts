@@ -3,10 +3,14 @@ import { serve } from "@hono/node-server";
 import { createClaudeCliAdapter } from "@temper/adapter-claude-cli";
 import { audit, loadWorkflows, openDb, seedAgents, type AgentAdapter } from "@temper/core";
 import { createApi } from "./api.ts";
+import { useGithubUser } from "@temper/plugin-github";
 import { loadConfig } from "./config.ts";
+import { loadProfile } from "./profile.ts";
 import { Factory } from "./factory.ts";
 
 const config = loadConfig();
+const profile = loadProfile(config.home);
+await useGithubUser(profile.github?.user);
 const { db, close } = await openDb(config.dataDir);
 await seedAgents(db);
 

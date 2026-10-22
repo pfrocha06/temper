@@ -1,11 +1,16 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { GIT_CREDENTIAL_ARGS, githubEnv } from "@temper/plugin-github";
 import { run } from "./exec.ts";
 
 export type ChangedFile = { status: "A" | "M" | "D" | "R"; path: string };
 
 async function git(cwd: string, ...args: string[]): Promise<string> {
-  const r = await run("git", args, { cwd, timeoutMs: 120_000 });
+  return gitWith(process.env, cwd, ...args);
+}
+
+async function gitWith(env: NodeJS.ProcessEnv, cwd: string, ...args: string[]): Promise<string> {
+  const r = await run("git", args, { cwd, env, timeoutMs: 120_000 });
   if (r.code !== 0) throw new Error(`git ${args.join(" ")} failed: ${r.stderr.trim()}`);
   return r.stdout.trim();
 }
@@ -64,7 +69,7 @@ export async function headSha(cwd: string): Promise<string> {
 
 /** Server-only: push the ticket branch. Agents never call this (ADR 2). */
 export async function pushBranch(cwd: string, branch: string): Promise<void> {
-  await git(cwd, "push", "--set-upstream", "origin", `${branch}:${branch}`);
+  await gitWith(githubEnv(), cwd, ...GIT_CREDENTIAL_ARGS, "push", "--set-upstream", "origin", `${branch}:${branch}`);
 }
 
 /** Files changed between two refs. */
@@ -91,5 +96,5 @@ export async function commitAll(cwd: string, message: string): Promise<boolean> 
 }
 
 export async function fetchBranch(cwd: string, branch: string): Promise<void> {
-  await git(cwd, "fetch", "-q", "origin", branch);
+  await gitWith(githubEnv(), cwd, ...GIT_CREDENTIAL_ARGS, "fetch", "-q", "origin", branch);
 }
