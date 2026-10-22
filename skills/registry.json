@@ -1,0 +1,268 @@
+{
+  "skills": [
+    {
+      "name": "architect",
+      "origin": "vendor",
+      "path": "skills/vendor/backnotprop/architect",
+      "source": "backnotprop/pstack",
+      "commit": "e44668c2aad92eacf4e84df47984121fefb11b82",
+      "license": "MIT"
+    },
+    {
+      "name": "benchmark-checklist",
+      "origin": "vendor",
+      "path": "skills/vendor/backnotprop/benchmark-checklist",
+      "source": "backnotprop/pstack",
+      "commit": "e44668c2aad92eacf4e84df47984121fefb11b82",
+      "license": "MIT"
+    },
+    {
+      "name": "blast-radius",
+      "origin": "vendor",
+      "path": "skills/vendor/backnotprop/blast-radius",
+      "source": "backnotprop/pstack",
+      "commit": "e44668c2aad92eacf4e84df47984121fefb11b82",
+      "license": "MIT"
+    },
+    {
+      "name": "code-review",
+      "origin": "vendor",
+      "path": "skills/vendor/mattpocock/code-review",
+      "source": "mattpocock/skills",
+      "commit": "5beb35b040e3de97e54fa9e386d7e42d15c295c2",
+      "license": "MIT"
+    },
+    {
+      "name": "codebase-design",
+      "origin": "vendor",
+      "path": "skills/vendor/mattpocock/codebase-design",
+      "source": "mattpocock/skills",
+      "commit": "5beb35b040e3de97e54fa9e386d7e42d15c295c2",
+      "license": "MIT"
+    },
+    {
+      "name": "composition-patterns",
+      "origin": "vendor",
+      "path": "skills/vendor/vercel-labs/composition-patterns",
+      "source": "vercel-labs/agent-skills",
+      "commit": "063bee94c3f4df8453406c830b0a7df0f2860278",
+      "license": "MIT"
+    },
+    {
+      "name": "correct",
+      "origin": "vendor",
+      "path": "skills/vendor/backnotprop/correct",
+      "source": "backnotprop/pstack",
+      "commit": "e44668c2aad92eacf4e84df47984121fefb11b82",
+      "license": "MIT"
+    },
+    {
+      "name": "create-verification-skill",
+      "origin": "vendor",
+      "path": "skills/vendor/backnotprop/create-verification-skill",
+      "source": "backnotprop/pstack",
+      "commit": "e44668c2aad92eacf4e84df47984121fefb11b82",
+      "license": "MIT"
+    },
+    {
+      "name": "diagnosing-bugs",
+      "origin": "vendor",
+      "path": "skills/vendor/mattpocock/diagnosing-bugs",
+      "source": "mattpocock/skills",
+      "commit": "5beb35b040e3de97e54fa9e386d7e42d15c295c2",
+      "license": "MIT"
+    },
+    {
+      "name": "domain-modeling",
+      "origin": "vendor",
+      "path": "skills/vendor/mattpocock/domain-modeling",
+      "source": "mattpocock/skills",
+      "commit": "5beb35b040e3de97e54fa9e386d7e42d15c295c2",
+      "license": "MIT"
+    },
+    {
+      "name": "frontend-design",
+      "origin": "vendor",
+      "path": "skills/vendor/anthropics/frontend-design",
+      "source": "anthropics/skills",
+      "commit": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "grilling",
+      "origin": "vendor",
+      "path": "skills/vendor/mattpocock/grilling",
+      "source": "mattpocock/skills",
+      "commit": "5beb35b040e3de97e54fa9e386d7e42d15c295c2",
+      "license": "MIT"
+    },
+    {
+      "name": "interrogate",
+      "origin": "vendor",
+      "path": "skills/vendor/backnotprop/interrogate",
+      "source": "backnotprop/pstack",
+      "commit": "e44668c2aad92eacf4e84df47984121fefb11b82",
+      "license": "MIT"
+    },
+    {
+      "name": "maintain-verification-skill",
+      "origin": "vendor",
+      "path": "skills/vendor/backnotprop/maintain-verification-skill",
+      "source": "backnotprop/pstack",
+      "commit": "e44668c2aad92eacf4e84df47984121fefb11b82",
+      "license": "MIT"
+    },
+    {
+      "name": "playwright-cli",
+      "origin": "vendor",
+      "path": "skills/vendor/microsoft/playwright-cli",
+      "source": "microsoft/playwright-cli",
+      "commit": "b1a5903c5b633b8c9f843ad7b629c2a78437040c",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "principle-explain-the-number",
+      "origin": "vendor",
+      "path": "skills/vendor/backnotprop/principle-explain-the-number",
+      "source": "backnotprop/pstack",
+      "commit": "e44668c2aad92eacf4e84df47984121fefb11b82",
+      "license": "MIT"
+    },
+    {
+      "name": "principle-fix-root-causes",
+      "origin": "vendor",
+      "path": "skills/vendor/backnotprop/principle-fix-root-causes",
+      "source": "backnotprop/pstack",
+      "commit": "e44668c2aad92eacf4e84df47984121fefb11b82",
+      "license": "MIT"
+    },
+    {
+      "name": "principle-prove-it-works",
+      "origin": "vendor",
+      "path": "skills/vendor/backnotprop/principle-prove-it-works",
+      "source": "backnotprop/pstack",
+      "commit": "e44668c2aad92eacf4e84df47984121fefb11b82",
+      "license": "MIT"
+    },
+    {
+      "name": "principle-subtract-before-you-add",
+      "origin": "vendor",
+      "path": "skills/vendor/backnotprop/principle-subtract-before-you-add",
+      "source": "backnotprop/pstack",
+      "commit": "e44668c2aad92eacf4e84df47984121fefb11b82",
+      "license": "MIT"
+    },
+    {
+      "name": "principle-test-behavior-not-implementation",
+      "origin": "vendor",
+      "path": "skills/vendor/backnotprop/principle-test-behavior-not-implementation",
+      "source": "backnotprop/pstack",
+      "commit": "e44668c2aad92eacf4e84df47984121fefb11b82",
+      "license": "MIT"
+    },
+    {
+      "name": "react-best-practices",
+      "origin": "vendor",
+      "path": "skills/vendor/vercel-labs/react-best-practices",
+      "source": "vercel-labs/agent-skills",
+      "commit": "063bee94c3f4df8453406c830b0a7df0f2860278",
+      "license": "MIT"
+    },
+    {
+      "name": "reflect",
+      "origin": "vendor",
+      "path": "skills/vendor/backnotprop/reflect",
+      "source": "backnotprop/pstack",
+      "commit": "e44668c2aad92eacf4e84df47984121fefb11b82",
+      "license": "MIT"
+    },
+    {
+      "name": "research",
+      "origin": "vendor",
+      "path": "skills/vendor/mattpocock/research",
+      "source": "mattpocock/skills",
+      "commit": "5beb35b040e3de97e54fa9e386d7e42d15c295c2",
+      "license": "MIT"
+    },
+    {
+      "name": "retro",
+      "origin": "vendor",
+      "path": "skills/vendor/mattpocock/retro",
+      "source": "mattpocock/skills",
+      "commit": "5beb35b040e3de97e54fa9e386d7e42d15c295c2",
+      "license": "MIT"
+    },
+    {
+      "name": "shadcn",
+      "origin": "vendor",
+      "path": "skills/vendor/shadcn-ui/shadcn",
+      "source": "shadcn-ui/ui",
+      "commit": "25af02b1b467fcd53b63e0c6d6d324c57c16ef18",
+      "license": "MIT"
+    },
+    {
+      "name": "show-me-your-work",
+      "origin": "vendor",
+      "path": "skills/vendor/backnotprop/show-me-your-work",
+      "source": "backnotprop/pstack",
+      "commit": "e44668c2aad92eacf4e84df47984121fefb11b82",
+      "license": "MIT"
+    },
+    {
+      "name": "tdd",
+      "origin": "vendor",
+      "path": "skills/vendor/mattpocock/tdd",
+      "source": "mattpocock/skills",
+      "commit": "5beb35b040e3de97e54fa9e386d7e42d15c295c2",
+      "license": "MIT"
+    },
+    {
+      "name": "to-spec",
+      "origin": "vendor",
+      "path": "skills/vendor/mattpocock/to-spec",
+      "source": "mattpocock/skills",
+      "commit": "5beb35b040e3de97e54fa9e386d7e42d15c295c2",
+      "license": "MIT"
+    },
+    {
+      "name": "to-tickets",
+      "origin": "vendor",
+      "path": "skills/vendor/mattpocock/to-tickets",
+      "source": "mattpocock/skills",
+      "commit": "5beb35b040e3de97e54fa9e386d7e42d15c295c2",
+      "license": "MIT"
+    },
+    {
+      "name": "typescript-best-practices",
+      "origin": "vendor",
+      "path": "skills/vendor/backnotprop/typescript-best-practices",
+      "source": "backnotprop/pstack",
+      "commit": "e44668c2aad92eacf4e84df47984121fefb11b82",
+      "license": "MIT"
+    },
+    {
+      "name": "web-design-guidelines",
+      "origin": "vendor",
+      "path": "skills/vendor/vercel-labs/web-design-guidelines",
+      "source": "vercel-labs/agent-skills",
+      "commit": "063bee94c3f4df8453406c830b0a7df0f2860278",
+      "license": "MIT"
+    },
+    {
+      "name": "webapp-testing",
+      "origin": "vendor",
+      "path": "skills/vendor/anthropics/webapp-testing",
+      "source": "anthropics/skills",
+      "commit": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "writing-for-agents",
+      "origin": "vendor",
+      "path": "skills/vendor/mattpocock/writing-for-agents",
+      "source": "mattpocock/skills",
+      "commit": "5beb35b040e3de97e54fa9e386d7e42d15c295c2",
+      "license": "MIT"
+    }
+  ]
+}
