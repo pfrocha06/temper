@@ -43,7 +43,7 @@ import {
   type Verdict,
   type Workflow,
 } from "@temper/core";
-import { createPullRequest, mergePullRequest, prBody, prState } from "@temper/plugin-github";
+import { createPullRequest, deleteRemoteBranch, mergePullRequest, prBody, prState } from "@temper/plugin-github";
 import { bootApp } from "./app-runner.ts";
 import type { Config } from "./config.ts";
 import { diffGuard } from "./gates/diff-guard.ts";
@@ -521,8 +521,10 @@ export class Factory extends EventEmitter {
       return { verdict: "PASS", summary: "waiting for the board to merge", waiting: true };
     }
     if (decision.resolution !== "approve") return { verdict: "FAIL", summary: `Board rejected the merge${decision.note ? `: ${decision.note}` : ""}` };
-    const state = await prState(worktree, ticket.prUrl!);
-    if (state.state !== "MERGED") await mergePullRequest(worktree, ticket.prUrl!);
+    // Recoverable: a retry after a partial failure finds the PR merged and only finishes cleanup.
+    const state = await prState(ticket.prUrl!);
+    if (state.state !== "MERGED") await mergePullRequest(ticket.prUrl!);
+    await deleteRemoteBranch(ticket.prUrl!, ticket.branch!);
     await recordSignal(this.db, "clean_merge", ticket.id);
     await audit(this.db, { actor: "system", kind: "pr.merged", subject: ticket.id, data: { url: ticket.prUrl } });
     return { verdict: "PASS", summary: `Merged ${ticket.prUrl}` };
