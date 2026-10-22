@@ -30,6 +30,7 @@ import {
 } from "@temper/core";
 import type { Config } from "./config.ts";
 import type { Factory } from "./factory.ts";
+import { createHealth } from "./health.ts";
 import { readRegistry } from "./skills.ts";
 
 const NewProject = z.object({
@@ -67,10 +68,13 @@ const AgentEdit = z.object({
   instructions: z.string(),
 });
 
-export function createApi(db: Db, factory: Factory, config: Config): Hono {
+export function createApi(db: Db, factory: Factory, config: Config, opts: { uptime?: () => number } = {}): Hono {
   const app = new Hono();
+  const health = createHealth(config, opts.uptime);
 
   app.onError((err, c) => c.json({ error: err.message }, err instanceof z.ZodError ? 400 : 500));
+
+  app.get("/api/health", (c) => c.json(health()));
 
   app.get("/api/status", async (c) => {
     const [latest] = await snapshotHistory(db, 1);
