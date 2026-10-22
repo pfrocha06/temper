@@ -26,6 +26,7 @@ import {
   updateProject,
   updateTicket,
   type Db,
+  type Role,
 } from "@temper/core";
 import type { Config } from "./config.ts";
 import type { Factory } from "./factory.ts";
@@ -130,7 +131,11 @@ export function createApi(db: Db, factory: Factory, config: Config): Hono {
     return c.json(approval);
   });
 
-  app.get("/api/agents", async (c) => c.json(await listAgents(db)));
+  app.get("/api/agents", async (c) => {
+    const agents = await listAgents(db);
+    // The version the dispatcher actually runs (a Verifier edit waits for board approval).
+    return c.json(await Promise.all(agents.map(async (a) => ({ ...a, approvedVersion: (await factory.agentFor(a.role as Role)).version }))));
+  });
   app.put("/api/agents/:id", async (c) => {
     const current = (await listAgents(db)).find((a) => a.id === c.req.param("id"));
     if (!current) return c.json({ error: "not found" }, 404);
@@ -152,7 +157,8 @@ export function createApi(db: Db, factory: Factory, config: Config): Hono {
         wake?.();
       };
       const offAudit = onAudit((e) => push("audit", e));
-      const offEvents = onDispatchEvent((e) => (!dispatchFilter || e.dispatchId === dispatchFilter) && push("dispatch_event", e));
+      // Agent output is high-volume: only streamed to clients following a specific dispatch.
+      const offEvents = onDispatchEvent((e) => dispatchFilter !== undefined && e.dispatchId === dispatchFilter && push("dispatch_event", e));
       const onChange = () => push("change", {});
       factory.on("change", onChange);
       stream.onAbort(() => {
