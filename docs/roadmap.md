@@ -1,5 +1,14 @@
 # Roadmap
 
+## North star
+
+A harness whose agents improve themselves over time, so the board can trust them with more and
+more work without approving each step: autonomy is earned per area from measured evidence
+(catch rates, clean merges) and lost automatically when trust drops. Later the factory also runs
+**automations and scheduled tasks**, and reads **many data sources** (issue trackers, wikis,
+meeting notes from an AI notetaker, chat) through connectors — so work can start from where
+decisions are actually made, not only from specs typed into Temper.
+
 What is built, what is next, and where the spec for each next step lives. Specs in
 `docs/specs/` are written to be picked up cold by another agent (or imported into Temper
 itself with `temper import-spec`, or handed to the Chief of Staff in a conversation).
@@ -43,6 +52,12 @@ environments · Chief of Staff conversations · Tools inventory
 | 9 | Factory metrics | [0010](specs/0010-metrics.md) | todo |
 | 10 | Second agent vendor (Codex) behind the adapter | [0011](specs/0011-second-vendor.md) | todo |
 | 11 | Off-machine backups | [0012](specs/0012-offsite-backup.md) | todo |
+| 12 | Providers settings: usage, subscription limits, caps, logos | [0013](specs/0013-providers-and-usage.md) | in progress |
+| 13 | Chief of Staff operator tools (board decisions only as confirmable proposals) | [0014](specs/0014-chief-operator-tools.md) | todo |
+| 14 | Connector catalog from the MCP Registry with generic OAuth and a credential proxy | [0015](specs/0015-connector-catalog.md) | todo |
+| 15 | Environment and project management UI | [0016](specs/0016-environments-ui.md) | todo |
+| 16 | Automations and scheduled tasks | — (later) | idea |
+| 17 | Data sources beyond code: wikis, meeting notetaker, chat, as knowledge and work intake | — (later) | idea |
 
 Items 4–6 share machinery; build them in order. Item 7 depends on 5. Item 6 is inspired by
 Harness² (google-research/harness2): an editable harness improved by proposing edits, probing
