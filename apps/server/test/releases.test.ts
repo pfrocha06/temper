@@ -80,3 +80,16 @@ describe("waitHealthy", () => {
     expect(await waitHealthy(port, 700)).toBe(false);
   });
 });
+
+describe("waitStopped", () => {
+  it("waits while something answers on the port and returns once it is gone", async () => {
+    const { createServer } = await import("node:http");
+    const srv = createServer((_q, r) => r.end("ok"));
+    await new Promise<void>((r) => srv.listen(0, "127.0.0.1", () => r()));
+    const port = (srv.address() as { port: number }).port;
+    const { waitStopped } = await import("../src/releases.ts");
+    expect(await waitStopped(port, 800)).toBe(false);
+    srv.close();
+    expect(await waitStopped(port, 5000)).toBe(true);
+  }, 15_000);
+});
