@@ -2,7 +2,12 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-const exec = promisify(execFile);
+import { githubEnv } from "./auth.ts";
+
+export { GIT_CREDENTIAL_ARGS, githubEnv, useGithubUser } from "./auth.ts";
+
+const execRaw = promisify(execFile);
+const exec = (cmd: string, args: string[], opts: { cwd: string }) => execRaw(cmd, args, { ...opts, env: githubEnv() });
 
 export type PullRequest = { url: string; number: number; state: "OPEN" | "CLOSED" | "MERGED"; mergeable?: string };
 
