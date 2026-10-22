@@ -25,6 +25,15 @@ describe("temperature from the audit log", () => {
   });
 });
 
+describe("clean merges", () => {
+  it("record a new snapshot when the clean streak grows", async () => {
+    await refreshTemperature(db);
+    await recordSignal(db, "clean_merge", "tkt_x");
+    const { snapshot } = await refreshTemperature(db);
+    expect((snapshot.contributions as { cleanStreak: number }).cleanStreak).toBe(1);
+  });
+});
+
 describe("dispatches", () => {
   it("finish exactly once and count attempts per stage", async () => {
     const p = await createProject(db, { name: "p", repoPath: "/r" });

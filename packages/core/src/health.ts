@@ -36,7 +36,9 @@ export async function refreshTemperature(db: Db, now = new Date()): Promise<{ sn
   const previous = await latestSnapshot(db);
   const events = await healthEvents(db, new Date(now.getTime() - 30 * 86_400_000));
   const t = computeTemperature(events, now, (previous?.regime as Regime | undefined) ?? "cool");
-  const changed = !previous || previous.regime !== t.regime || Math.abs(previous.value - t.value) > 0.01;
+  const prevStreak = (previous?.contributions as { cleanStreak?: number } | undefined)?.cleanStreak ?? 0;
+  const changed =
+    !previous || previous.regime !== t.regime || Math.abs(previous.value - t.value) > 0.01 || prevStreak !== t.cleanStreak;
   if (!changed) return { snapshot: previous!, temperature: t };
   const [snapshot] = await db
     .insert(temperatureSnapshots)
