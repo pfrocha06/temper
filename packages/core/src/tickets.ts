@@ -1,7 +1,7 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { audit, type Actor } from "./audit.ts";
 import type { Db } from "./db/client.ts";
-import { tickets, type AcceptanceCriterion } from "./db/schema.ts";
+import { tickets, type AcceptanceCriterion, type ExternalRef } from "./db/schema.ts";
 import { newId } from "./ids.ts";
 import type { TicketType } from "./workflow.ts";
 
@@ -28,6 +28,7 @@ export type NewTicket = {
   fileScope?: string[];
   dependsOn?: string[];
   parentId?: string;
+  externalRef?: ExternalRef;
   status?: TicketStatus;
 };
 
@@ -42,6 +43,23 @@ export async function createTicket(db: Db, input: NewTicket, actor: Actor = "boa
 
 export async function getTicket(db: Db, id: string): Promise<Ticket | undefined> {
   const [row] = await db.select().from(tickets).where(eq(tickets.id, id));
+  return row;
+}
+
+/** The open (not done or cancelled) ticket linked to this tracker and key, if any. */
+export async function findOpenTicketByRef(db: Db, tracker: string, key: string): Promise<Ticket | undefined> {
+  const [row] = await db
+    .select()
+    .from(tickets)
+    .where(
+      and(
+        sql`${tickets.externalRef}->>'tracker' = ${tracker}`,
+        sql`${tickets.externalRef}->>'key' = ${key}`,
+        notInArray(tickets.status, ["done", "cancelled"]),
+      ),
+    )
+    .orderBy(asc(tickets.createdAt))
+    .limit(1);
   return row;
 }
 
