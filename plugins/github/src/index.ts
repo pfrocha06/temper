@@ -1,5 +1,6 @@
 // Git host plugin for GitHub, via the `gh` CLI. Used only by the server (ADR 2).
 import { execFile } from "node:child_process";
+import { tmpdir } from "node:os";
 import { promisify } from "node:util";
 
 import { githubEnv } from "./auth.ts";
@@ -63,11 +64,31 @@ export async function findPullRequest(cwd: string, head: string): Promise<PullRe
   return pr;
 }
 
-export async function mergePullRequest(cwd: string, url: string): Promise<void> {
-  await exec("gh", ["pr", "merge", url, "--squash", "--delete-branch"], { cwd });
+/** `https://github.com/<owner>/<repo>/pull/<n>` → `<owner>/<repo>`. */
+export function repoOf(prUrl: string): string {
+  const m = /github\.com\/([^/]+\/[^/]+)\/pull\/\d+/.exec(prUrl);
+  if (!m) throw new Error(`not a GitHub pull request URL: ${prUrl}`);
+  return m[1]!;
 }
 
-export async function prState(cwd: string, url: string): Promise<PullRequest> {
-  const { stdout } = await exec("gh", ["pr", "view", url, "--json", "url,number,state,mergeable"], { cwd });
+/**
+ * Squash-merges on GitHub only. Runs outside any checkout: inside one, gh also tries to
+ * switch the local branch, which fails when that branch is checked out in another worktree.
+ */
+export async function mergePullRequest(url: string): Promise<void> {
+  await exec("gh", ["pr", "merge", url, "--squash"], { cwd: tmpdir() });
+}
+
+/** Deletes a branch on GitHub. Idempotent: a branch that is already gone is not an error. */
+export async function deleteRemoteBranch(prUrl: string, branch: string): Promise<void> {
+  try {
+    await exec("gh", ["api", "-X", "DELETE", `repos/${repoOf(prUrl)}/git/refs/heads/${branch}`], { cwd: tmpdir() });
+  } catch (err) {
+    if (!/Reference does not exist|HTTP 422|HTTP 404/.test(String((err as { stderr?: string }).stderr ?? err))) throw err;
+  }
+}
+
+export async function prState(url: string): Promise<PullRequest> {
+  const { stdout } = await exec("gh", ["pr", "view", url, "--json", "url,number,state,mergeable"], { cwd: tmpdir() });
   return JSON.parse(stdout) as PullRequest;
 }

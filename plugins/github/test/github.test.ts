@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeRisk, prBody } from "../src/index.ts";
+import { mergeRisk, prBody, repoOf } from "../src/index.ts";
 
 describe("mergeRisk", () => {
   it("scales with files and areas", () => {
@@ -15,5 +15,12 @@ describe("prBody", () => {
     expect(body).toContain("merge risk: low");
     expect(body).toContain("## Evidence");
     expect(body).not.toContain("VERDICT");
+  });
+});
+
+describe("repoOf", () => {
+  it("extracts owner/repo from a PR URL", () => {
+    expect(repoOf("https://github.com/acme/widgets/pull/12")).toBe("acme/widgets");
+    expect(() => repoOf("https://example.com/x")).toThrow(/not a GitHub/);
   });
 });
