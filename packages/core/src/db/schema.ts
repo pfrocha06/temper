@@ -160,6 +160,10 @@ export const approvals = pgTable(
     status: text("status").notNull().default("pending"),
     resolution: text("resolution"),
     note: text("note"),
+    /** For proposals: the action the board confirms, e.g. { action: "resolve_approval", approvalId, resolution }. */
+    payload: jsonb("payload").$type<Record<string, unknown>>(),
+    /** The Chief conversation a proposal came from. */
+    chatId: text("chat_id"),
     createdAt: createdAt(),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   },
@@ -263,3 +267,56 @@ export const chatMessages = pgTable(
   },
   (t) => [index("chat_messages_chat_idx").on(t.chatId, t.id)],
 );
+
+/** Usage reported by an agent provider for one run (stage, digest, chat turn, trial). */
+export const providerUsage = pgTable(
+  "provider_usage",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    adapter: text("adapter").notNull(),
+    model: text("model").notNull(),
+    dispatchId: text("dispatch_id"),
+    chatId: text("chat_id"),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
+    cacheWriteTokens: integer("cache_write_tokens").notNull().default(0),
+    /** List-price equivalent the provider reports; subscriptions are not billed per token. */
+    costUsd: doublePrecision("cost_usd"),
+    apiMs: integer("api_ms"),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("provider_usage_adapter_idx").on(t.adapter, t.at)],
+);
+
+/** Rate-limit / subscription window reports, appended as the provider emits them. */
+export const providerLimits = pgTable(
+  "provider_limits",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    adapter: text("adapter").notNull(),
+    limitType: text("limit_type").notNull(),
+    status: text("status").notNull(),
+    resetsAt: timestamp("resets_at", { withTimezone: true }),
+    raw: jsonb("raw").notNull(),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("provider_limits_adapter_idx").on(t.adapter, t.limitType, t.at)],
+);
+
+export type ProviderCaps = {
+  runsPerDay?: number;
+  tokensPerDay?: number;
+  runsPerSession?: number;
+  tokensPerSession?: number;
+  runsPerWeek?: number;
+  tokensPerWeek?: number;
+  /** Length of the provider's session window in hours (5 for Claude subscriptions). */
+  sessionHours?: number;
+};
+
+export const providerSettings = pgTable("provider_settings", {
+  adapter: text("adapter").primaryKey(),
+  caps: jsonb("caps").$type<ProviderCaps>().notNull().default({}),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});

@@ -15,3 +15,4 @@ export * from "./health.ts";
 export * from "./environments.ts";
 export * from "./knowledge.ts";
 export * from "./chats.ts";
+export * from "./usage.ts";

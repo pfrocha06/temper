@@ -3,7 +3,7 @@ import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { createInterface } from "node:readline";
-import type { AgentAdapter, RunEvent, RunRequest, RunResult } from "@temper/core";
+import type { AgentAdapter, ModelUsage, RunEvent, RunRequest, RunResult } from "@temper/core";
 
 export type ClaudeCliOptions = {
   /** Path to the `claude` binary. */
@@ -104,15 +104,36 @@ export function parseLine(line: string): RunEvent[] {
       return (d.message?.content ?? [])
         .filter((c: Block) => c.type === "tool_result")
         .map((c: Block): RunEvent => ({ kind: "tool_result", isError: !!c.is_error, content: contentText(c.content).slice(0, 4000) }));
-    case "rate_limit_event":
-      return d.rate_limit_info?.status && d.rate_limit_info.status !== "allowed"
-        ? [{ kind: "rate_limited", text: JSON.stringify(d.rate_limit_info) }]
-        : [];
+    case "rate_limit_event": {
+      const info = d.rate_limit_info ?? {};
+      if (!info.status) return [];
+      const report: RunEvent = {
+        kind: "rate_limit",
+        limitType: String(info.rateLimitType ?? "unknown"),
+        status: String(info.status),
+        resetsAt: typeof info.resetsAt === "number" ? info.resetsAt : undefined,
+        raw: info,
+      };
+      return info.status === "allowed" ? [report] : [report, { kind: "rate_limited", text: JSON.stringify(info) }];
+    }
     case "result": {
       const text = typeof d.result === "string" ? d.result : "";
       const events: RunEvent[] = [
         { kind: "result", text, isError: !!d.is_error, turns: d.num_turns, durationMs: d.duration_ms },
       ];
+      if (d.modelUsage && typeof d.modelUsage === "object") {
+        const models: Record<string, ModelUsage> = {};
+        for (const [model, m] of Object.entries(d.modelUsage as Record<string, Record<string, number>>)) {
+          models[model] = {
+            inputTokens: m.inputTokens ?? 0,
+            outputTokens: m.outputTokens ?? 0,
+            cacheReadTokens: m.cacheReadInputTokens ?? 0,
+            cacheWriteTokens: m.cacheCreationInputTokens ?? 0,
+            costUsd: typeof m.costUSD === "number" ? m.costUSD : undefined,
+          };
+        }
+        events.push({ kind: "usage", models, apiMs: d.duration_api_ms });
+      }
       if (d.is_error && RATE_LIMIT.test(text)) events.push({ kind: "rate_limited", text });
       return events;
     }

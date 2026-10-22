@@ -27,10 +27,11 @@ describe("redactText", () => {
 
 describe("redact", () => {
   it("walks objects and redacts values under secret-looking keys", () => {
-    expect(redact({ token: "abc", nested: { list: ["API_KEY=x"] }, count: 3 })).toEqual({
+    expect(redact({ token: "abc", nested: { list: ["API_KEY=x"] }, count: 3, inputTokens: 120 })).toEqual({
       token: "[redacted]",
       nested: { list: ["API_KEY=[redacted]"] },
       count: 3,
+      inputTokens: 120,
     });
   });
 });

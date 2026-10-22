@@ -43,7 +43,8 @@ export function redact<T>(value: T): T {
   if (value && typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value)) {
-      out[k] = secretKey.test(k) && (typeof v === "string" || typeof v === "number") ? REDACTED : redact(v);
+      // Secrets are strings; numbers under such keys are counts (e.g. inputTokens) and stay.
+      out[k] = secretKey.test(k) && typeof v === "string" ? REDACTED : redact(v);
     }
     return out as T;
   }

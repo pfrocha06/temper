@@ -36,7 +36,9 @@ import {
   listChats,
   listEnvironments,
   searchKnowledge,
+  setCaps,
   updateKnowledge,
+  usageReport,
   type Db,
   type Role,
 } from "@temper/core";
@@ -47,6 +49,7 @@ import { createAgentApi } from "./agent-api.ts";
 import { BOARD_COOKIE, type Auth } from "./auth.ts";
 import { createHealth } from "./health.ts";
 import { loadProfile, type Profile } from "./profile.ts";
+import { listProviders } from "./providers.ts";
 import { inventory } from "./tools.ts";
 import { readRegistry } from "./skills.ts";
 
@@ -100,7 +103,7 @@ export function createApi(db: Db, factory: Factory, config: Config, opts: { upti
       setCookie(c, BOARD_COOKIE, auth.boardToken, { httpOnly: true, sameSite: "Strict", path: "/", maxAge: 365 * 86_400 });
       return c.redirect("/");
     });
-    app.route("/api/agent", createAgentApi(db, auth, () => void factory.tick()));
+    app.route("/api/agent", createAgentApi(db, auth, factory));
     const board = auth.board();
     app.use("/api/*", async (c, next) => (c.req.path === "/api/health" || c.req.path.startsWith("/api/agent/") ? next() : board(c, next)));
   }
@@ -240,6 +243,24 @@ export function createApi(db: Db, factory: Factory, config: Config, opts: { upti
     const { message } = z.object({ message: z.string().min(1) }).parse(await c.req.json());
     await factory.chat(c.req.param("id"), message);
     return c.json({ ok: true }, 202);
+  });
+
+  app.get("/api/providers", async (c) =>
+    c.json(await listProviders(db, await listAgents(db), { claudeBin: config.claudeBin, pausedAdapters: (factory.status().pausedAdapters ?? {}) as Record<string, number> })),
+  );
+  app.get("/api/usage", async (c) => {
+    const to = c.req.query("to") ? new Date(c.req.query("to")!) : new Date();
+    const from = c.req.query("from") ? new Date(c.req.query("from")!) : new Date(to.getTime() - 7 * 86_400_000);
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from >= to) return c.json({ error: "invalid range" }, 400);
+    return c.json(await usageReport(db, { from, to, projectId: c.req.query("projectId") }));
+  });
+  app.put("/api/providers/:id/caps", async (c) => {
+    const n = z.number().int().min(0).optional();
+    const caps = z
+      .object({ runsPerDay: n, tokensPerDay: n, runsPerSession: n, tokensPerSession: n, runsPerWeek: n, tokensPerWeek: n, sessionHours: z.number().min(1).max(24).optional() })
+      .strict()
+      .parse(await c.req.json());
+    return c.json(await setCaps(db, c.req.param("id"), caps));
   });
 
   app.get("/api/tools", async (c) => c.json(await inventory(opts.profile ?? loadProfile(config.home), await listAgents(db), config.claudeBin)));
