@@ -1,0 +1,6 @@
+{"type": "system", "subtype": "init", "session_id": "abed2fcf-a84a-4b06-a2f1-787fab1c5376", "model": "claude-sonnet-5-5", "cwd": "/work"}
+{"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "toolu_014moEzxeq7h4yPdXziiFGMT", "name": "Bash", "input": {"command": "echo hi", "description": "Print hi"}, "caller": {"type": "direct"}}]}, "session_id": "abed2fcf-a84a-4b06-a2f1-787fab1c5376"}
+{"type": "rate_limit_event", "rate_limit_info": {"status": "allowed"}, "session_id": "abed2fcf-a84a-4b06-a2f1-787fab1c5376"}
+{"type": "user", "message": {"content": [{"tool_use_id": "toolu_014moEzxeq7h4yPdXziiFGMT", "type": "tool_result", "content": "hi", "is_error": false}]}, "session_id": "abed2fcf-a84a-4b06-a2f1-787fab1c5376"}
+{"type": "assistant", "message": {"content": [{"type": "text", "text": "VERDICT: PASS"}]}, "session_id": "abed2fcf-a84a-4b06-a2f1-787fab1c5376"}
+{"type": "result", "subtype": "success", "is_error": false, "result": "VERDICT: PASS", "num_turns": 2, "duration_ms": 4062, "session_id": "abed2fcf-a84a-4b06-a2f1-787fab1c5376"}
