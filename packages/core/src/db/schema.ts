@@ -20,6 +20,13 @@ export const projects = pgTable("projects", {
   remoteUrl: text("remote_url"),
   holdoutsPath: text("holdouts_path"),
   defaultBranch: text("default_branch").notNull().default("main"),
+  /** Runs the project's own tests in a worktree. */
+  testCommand: text("test_command").notNull().default("pnpm test"),
+  /** Boots the app from a worktree; receives PORT. Empty when there is no app to run. */
+  appCommand: text("app_command"),
+  appHealthPath: text("app_health_path").notNull().default("/"),
+  /** Runs holdouts from the holdouts checkout; receives TEMPER_APP_URL. Prints `AC-<id>: PASS|FAIL <msg>` lines. */
+  holdoutsCommand: text("holdouts_command"),
   createdAt: createdAt(),
 });
 

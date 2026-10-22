@@ -1,0 +1,30 @@
+{
+  "name": "@temper/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "temper": "./src/cli.ts"
+  },
+  "scripts": {
+    "dev": "node --watch src/main.ts",
+    "start": "node src/main.ts",
+    "typecheck": "tsc -p .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.5",
+    "@temper/adapter-claude-cli": "workspace:*",
+    "@temper/core": "workspace:*",
+    "@temper/plugin-github": "workspace:*",
+    "drizzle-orm": "0.45.4",
+    "hono": "^4.13.13",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}
