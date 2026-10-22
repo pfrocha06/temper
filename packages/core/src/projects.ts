@@ -11,6 +11,7 @@ export async function createProject(
   input: {
     name: string;
     repoPath: string;
+    environmentId?: string;
     remoteUrl?: string;
     holdoutsPath?: string;
     defaultBranch?: string;

@@ -1,9 +1,9 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { RunEvent } from "@temper/core";
-import { buildArgs, buildSkillPlugin, createClaudeCliAdapter, parseLine } from "../src/index.ts";
+import { buildArgs, buildSkillPlugin, createClaudeCliAdapter, parseLine, writeMcpConfig } from "../src/index.ts";
 
 const fixture = join(import.meta.dirname, "fixtures/echo-pass.jsonl");
 
@@ -29,6 +29,17 @@ describe("buildArgs", () => {
     expect(settings.permissions.deny).toContain("Read(//holdouts/**)");
     expect(settings.sandbox.allowUnsandboxedCommands).toBe(false);
     expect(settings.sandbox.network.allowLocalBinding).toBe(true);
+  });
+});
+
+describe("mcp", () => {
+  it("passes only the run's MCP servers and allows their tools", () => {
+    const req = { cwd: "/w", prompt: "x", allowedTools: ["Read"], disallowedTools: [], mcpServers: { temper: { command: "node", args: ["s.ts"] } } };
+    const file = writeMcpConfig(req);
+    expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({ mcpServers: { temper: { command: "node", args: ["s.ts"] } } });
+    expect(statSync(file).mode & 0o777).toBe(0o600);
+    const args = buildArgs(req, undefined, file);
+    expect(args).toEqual(expect.arrayContaining(["--strict-mcp-config", "--mcp-config", file, "mcp__temper"]));
   });
 });
 

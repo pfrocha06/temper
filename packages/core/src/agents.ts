@@ -4,7 +4,7 @@ import { audit, type Actor } from "./audit.ts";
 import type { Db } from "./db/client.ts";
 import { agents, type AgentPermissions } from "./db/schema.ts";
 
-export const ROLES = ["planner", "builder", "verifier", "reviewer"] as const;
+export const ROLES = ["chief", "builder", "verifier", "reviewer"] as const;
 export type Role = (typeof ROLES)[number];
 
 export type Agent = typeof agents.$inferSelect;
@@ -20,10 +20,27 @@ const write: AgentPermissions = {
 const readOnly: AgentPermissions = { allowedTools: readOnlyTools, disallowedTools: [...neverTools, "Edit", "Write"] };
 
 export const DEFAULT_AGENTS: AgentDraft[] = [
-  { id: "planner", role: "planner", name: "Planner", adapter: "claude-cli", model: "opus", skills: ["grilling", "to-spec", "to-tickets", "domain-modeling", "research", "architect", "blast-radius"], permissions: readOnly, maxConcurrency: 1, runsPerHour: 6, instructions: "" },
-  { id: "builder", role: "builder", name: "Builder", adapter: "claude-cli", model: "sonnet", skills: ["tdd", "codebase-design", "diagnosing-bugs", "typescript-best-practices", "principle-prove-it-works", "principle-fix-root-causes", "principle-subtract-before-you-add", "frontend-design", "shadcn", "react-best-practices", "web-design-guidelines", "composition-patterns"], permissions: write, maxConcurrency: 2, runsPerHour: 12, instructions: "" },
-  { id: "verifier", role: "verifier", name: "Verifier", adapter: "claude-cli", model: "opus", skills: ["create-verification-skill", "maintain-verification-skill", "playwright-cli", "webapp-testing", "principle-test-behavior-not-implementation", "benchmark-checklist"], permissions: write, maxConcurrency: 1, runsPerHour: 12, instructions: "" },
-  { id: "reviewer", role: "reviewer", name: "Reviewer", adapter: "claude-cli", model: "opus", skills: ["code-review", "interrogate", "blast-radius", "principle-explain-the-number"], permissions: readOnly, maxConcurrency: 1, runsPerHour: 12, instructions: "" },
+  {
+    id: "chief",
+    role: "chief",
+    name: "Chief of Staff",
+    adapter: "claude-cli",
+    model: "opus",
+    skills: ["grilling", "to-spec", "to-tickets", "domain-modeling", "research", "architect", "blast-radius", "retro", "writing-for-agents"],
+    permissions: readOnly,
+    mcpServers: ["temper"],
+    maxConcurrency: 1,
+    runsPerHour: 12,
+    instructions: [
+      "You are the Chief of Staff: the one agent that holds the whole picture.",
+      "You gather context (from the board, tickets, runs and the knowledge base), turn it into specs and tickets, and delegate to the Builder, Verifier and Reviewer.",
+      "You are the only agent that writes shared knowledge. Record durable facts about the environment, conventions, decisions, gotchas and how-tos.",
+      "Never record claims about what the code does that you have not seen proven; never record secrets.",
+    ].join(" "),
+  },
+  { id: "builder", role: "builder", name: "Builder", adapter: "claude-cli", model: "sonnet", skills: ["tdd", "codebase-design", "diagnosing-bugs", "typescript-best-practices", "principle-prove-it-works", "principle-fix-root-causes", "principle-subtract-before-you-add", "frontend-design", "shadcn", "react-best-practices", "web-design-guidelines", "composition-patterns"], permissions: write, mcpServers: ["temper"], maxConcurrency: 2, runsPerHour: 12, instructions: "" },
+  { id: "verifier", role: "verifier", name: "Verifier", adapter: "claude-cli", model: "opus", skills: ["create-verification-skill", "maintain-verification-skill", "playwright-cli", "webapp-testing", "principle-test-behavior-not-implementation", "benchmark-checklist"], permissions: write, mcpServers: ["temper"], maxConcurrency: 1, runsPerHour: 12, instructions: "" },
+  { id: "reviewer", role: "reviewer", name: "Reviewer", adapter: "claude-cli", model: "opus", skills: ["code-review", "interrogate", "blast-radius", "principle-explain-the-number"], permissions: readOnly, mcpServers: ["temper"], maxConcurrency: 1, runsPerHour: 12, instructions: "" },
 ];
 
 /** Latest version of each agent. */

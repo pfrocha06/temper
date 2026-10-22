@@ -4,17 +4,22 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { createClaudeCliAdapter } from "@temper/adapter-claude-cli";
+import { join } from "node:path";
+import { loadBoardToken } from "./auth.ts";
 import { loadConfig } from "./config.ts";
 import { probeHoldoutIsolation } from "./probe.ts";
 import { activate, backupDatabase, buildRelease, readState, restoreDatabase, waitHealthy } from "./releases.ts";
+import { run } from "./exec.ts";
 import { installService, serviceInstalled, uninstallService } from "./service.ts";
 
 const config = loadConfig();
 const [command = "help", ...rest] = process.argv.slice(2);
 const api = `http://127.0.0.1:${config.port}/api`;
 
+const boardToken = () => loadBoardToken(join(config.secretsDir, "board-token"), process.env.TEMPER_BOARD_TOKEN);
+
 async function call(path: string, init?: RequestInit): Promise<unknown> {
-  const res = await fetch(api + path, { ...init, headers: { "content-type": "application/json" } });
+  const res = await fetch(api + path, { ...init, headers: { "content-type": "application/json", authorization: `Bearer ${boardToken()}` } });
   const body = await res.json();
   if (!res.ok) throw new Error((body as { error?: string }).error ?? res.statusText);
   return body;
@@ -57,6 +62,7 @@ async function rollback() {
 
 const help = `temper <command>
 
+  open                           open the console in your browser, signed in as the board
   serve                          run the server in the foreground (development)
   deploy [--ref main] [--source .]   build, verify and switch the service to a release
   rollback                       switch back to the previous release
@@ -69,6 +75,12 @@ const help = `temper <command>
 `;
 
 switch (command) {
+  case "open": {
+    const url = `http://127.0.0.1:${config.port}/auth?token=${encodeURIComponent(boardToken())}`;
+    await run("open", [url], { cwd: config.home });
+    log(`opened the console; to sign in another browser use:\n${url}`);
+    break;
+  }
   case "serve":
     await import("./main.ts");
     break;

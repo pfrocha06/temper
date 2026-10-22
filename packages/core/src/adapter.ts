@@ -16,10 +16,14 @@ export type RunRequest = {
   /** Skill directories (each containing SKILL.md) to expose to this run only. */
   skillDirs?: string[];
   appendSystemPrompt?: string;
+  /** MCP servers for this run only; nothing else is loaded (strict). */
+  mcpServers?: Record<string, McpServerSpec>;
   /** Extra environment for the agent process (and the commands it runs). */
   env?: Record<string, string>;
   signal?: AbortSignal;
 };
+
+export type McpServerSpec = { command: string; args?: string[]; env?: Record<string, string> };
 
 export type RunEvent =
   | { kind: "init"; sessionId: string; model?: string }

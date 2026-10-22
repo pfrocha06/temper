@@ -33,7 +33,7 @@ const AgentStage = z
   .object({
     id: z.string().regex(/^[a-z][a-z0-9_]*$/),
     kind: z.literal("agent"),
-    role: z.enum(["planner", "builder", "verifier", "reviewer"]),
+    role: z.enum(["chief", "builder", "verifier", "reviewer"]),
     instructions: z.string().min(1),
     artifact: z.string().optional(),
     readOnly: z.boolean().default(false),

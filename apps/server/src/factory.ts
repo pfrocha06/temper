@@ -31,12 +31,21 @@ import {
   startStage,
   ticketDispatches,
   updateTicket,
+  addChatMessage,
+  getChat,
+  getEnvironment,
+  knowledgeDigest,
+  listProjects,
+  recordKnowledgeReads,
+  searchKnowledge,
   type Agent,
   type AgentAdapter,
+  type McpServerSpec,
   type Approval,
   type Db,
   type Project,
   type Role,
+  type RunEvent,
   type Stage,
   type Ticket,
   type TicketType,
@@ -63,8 +72,12 @@ import {
   removeWorktree,
 } from "./git.ts";
 import { parsePlan } from "./plan.ts";
-import { buildPrompt, FEEDBACK_ARTIFACT, PLANNER_PROMPT } from "./prompt.ts";
+import type { Auth } from "./auth.ts";
+import type { Profile } from "./profile.ts";
+import { buildPrompt, CHIEF_CHAT_PROMPT, CHIEF_DIGEST_PROMPT, CHIEF_INTAKE_PROMPT, FEEDBACK_ARTIFACT } from "./prompt.ts";
 import { resolveSkills } from "./skills.ts";
+
+export type FactoryOptions = { auth?: Auth; profile?: Profile };
 
 type AgentStage = Extract<Stage, { kind: "agent" }>;
 type GateStage = Extract<Stage, { kind: "gate" }>;
@@ -104,12 +117,52 @@ export class Factory extends EventEmitter {
   private adapters: Map<string, AgentAdapter>;
   private workflows: Map<TicketType, Workflow>;
 
-  constructor(db: Db, config: Config, adapters: Map<string, AgentAdapter>, workflows: Map<TicketType, Workflow>) {
+  private options: FactoryOptions;
+
+  constructor(db: Db, config: Config, adapters: Map<string, AgentAdapter>, workflows: Map<TicketType, Workflow>, options: FactoryOptions = {}) {
     super();
     this.db = db;
     this.config = config;
     this.adapters = adapters;
     this.workflows = workflows;
+    this.options = options;
+  }
+
+  // ── context for agent runs: capability, MCP servers, shared knowledge ────
+
+  private environmentOf(project: Project): string {
+    return project.environmentId ?? "env_default";
+  }
+
+  /**
+   * MCP servers for one run: the built-in `temper` server (with a capability scoped to this run)
+   * plus any profile servers assigned to the agent. Returns a release function.
+   */
+  private mcpFor(agent: Agent, scope: { environmentId: string; projectId?: string; dispatchId?: string }): { servers: Record<string, McpServerSpec>; release: () => void } {
+    const servers: Record<string, McpServerSpec> = {};
+    let token: string | undefined;
+    const { auth, profile } = this.options;
+    if (agent.mcpServers.includes("temper") && auth) {
+      token = auth.issue({ role: agent.role, ...scope });
+      servers.temper = {
+        command: process.execPath,
+        args: [join(this.config.appRoot, "packages", "mcp-temper", "src", "main.ts")],
+        env: { TEMPER_API_URL: `http://127.0.0.1:${this.config.port}`, TEMPER_CAPABILITY: token },
+      };
+    }
+    for (const name of agent.mcpServers) {
+      const cfg = profile?.mcpServers[name];
+      if (cfg && name !== "temper") servers[name] = { command: cfg.command, args: cfg.args, env: cfg.env };
+    }
+    return { servers, release: () => token && auth?.revoke(token) };
+  }
+
+  /** The L0/L1 knowledge digest for a run, recorded as read by that dispatch. */
+  private async knowledgeFor(environmentId: string, projectId: string | undefined, paths: string[], dispatchId?: string): Promise<string | undefined> {
+    const entries = await searchKnowledge(this.db, { environmentId, projectId, paths, limit: 30 });
+    if (entries.length === 0) return undefined;
+    await recordKnowledgeReads(this.db, entries.map((e) => e.id), "prompt", dispatchId);
+    return knowledgeDigest(entries);
   }
 
   // ── lifecycle ────────────────────────────────────────────────────────────
@@ -371,6 +424,9 @@ export class Factory extends EventEmitter {
     const { dirs: skillDirs, missing } = resolveSkills(this.config.appRoot, agent.skills);
     if (missing.length) await recordDispatchEvent(this.db, dispatchId, { kind: "stderr", text: `skills not installed: ${missing.join(", ")}` });
 
+    const environmentId = this.environmentOf(project);
+    const knowledge = await this.knowledgeFor(environmentId, project.id, ticket.fileScope, dispatchId);
+    const mcp = this.mcpFor(agent, { environmentId, projectId: project.id, dispatchId });
     const prompt = buildPrompt({
       ticket,
       stage,
@@ -380,6 +436,7 @@ export class Factory extends EventEmitter {
       holdoutsPath: project.holdoutsPath,
       worktreePath: worktree,
       context,
+      knowledge,
     });
     try {
       const result = await adapter.run(
@@ -393,11 +450,13 @@ export class Factory extends EventEmitter {
           denyDirs,
           skillDirs,
           appendSystemPrompt: agent.instructions || undefined,
+          mcpServers: mcp.servers,
           env:
             stage.role === "verifier"
               ? {
                   ...AGENT_ENV,
                   TEMPER_APP_URL: app?.url ?? "",
+                  TEMPER_APP_TOKEN: app?.token ?? "",
                   TEMPER_CANDIDATE_PATH: worktree,
                   TEMPER_TICKET_ID: ticket.id,
                   TEMPER_REGRESSION_TICKETS: (await this.regressionTickets(ticket.projectId)).join(","),
@@ -433,6 +492,7 @@ export class Factory extends EventEmitter {
       };
     } finally {
       app?.stop();
+      mcp.release();
     }
   }
 
@@ -459,15 +519,25 @@ export class Factory extends EventEmitter {
       return this.runPrGate(ticket, stage, project, worktree);
     }
     if (stage.checks.includes("holdouts")) await this.ensureHoldoutsSetup(project);
-    const outcome = await runChecks(stage.checks, {
-      project: { ...project, defaultBranch: baseRef(project) },
-      ticket,
-      worktree,
-      regressionTickets: await this.regressionTickets(project.id),
-      signal,
-    });
+    // Progress is written in order, without holding up the checks themselves.
+    let written: Promise<void> = Promise.resolve();
+    const onEvent = (event: RunEvent) => {
+      written = written.then(() => recordDispatchEvent(this.db, dispatchId, event)).catch(() => {});
+    };
+    let outcome: Awaited<ReturnType<typeof runChecks>>;
+    try {
+      outcome = await runChecks(stage.checks, {
+        project: { ...project, defaultBranch: baseRef(project) },
+        ticket,
+        worktree,
+        regressionTickets: await this.regressionTickets(project.id),
+        signal,
+        onEvent,
+      });
+    } finally {
+      await written;
+    }
     for (const r of outcome.results) {
-      await recordDispatchEvent(this.db, dispatchId, { kind: "text", text: `${r.check}: ${r.ok ? "PASS" : "FAIL"}` });
       if (r.check === "holdouts" && !r.ok) await recordSignal(this.db, "holdout_failure", ticket.id);
     }
     return {
@@ -590,6 +660,114 @@ export class Factory extends EventEmitter {
     await updateTicket(this.db, ticket.id, { status: "done" });
     await this.cleanup(ticket);
     this.emit("change");
+    void this.digestTicket(ticket.id).catch((err) =>
+      audit(this.db, { actor: "system", kind: "digest.failed", subject: ticket.id, data: { error: (err as Error).message } }),
+    );
+  }
+
+  /**
+   * After a ticket finishes, the Chief of Staff reads what the workers reported and curates the
+   * shared knowledge: adds durable facts, corrects or archives stale ones. It is the only writer.
+   */
+  async digestTicket(ticketId: string): Promise<void> {
+    const ticket = await getTicket(this.db, ticketId);
+    if (!ticket) return;
+    const project = await this.project(ticket);
+    const agent = await this.agentFor("chief");
+    const adapter = this.adapters.get(agent.adapter);
+    if (!adapter || !agent.mcpServers.includes("temper") || !this.options.auth) return;
+    const environmentId = this.environmentOf(project);
+    const dispatch = await createDispatch(this.db, { ticketId, stage: "digest", agentId: agent.id, agentVersion: agent.version });
+    const mcp = this.mcpFor(agent, { environmentId, projectId: project.id, dispatchId: dispatch.id });
+    try {
+      const artifacts = await latestArtifacts(this.db, ticketId);
+      const knowledge = await this.knowledgeFor(environmentId, project.id, ticket.fileScope, dispatch.id);
+      const result = await adapter.run(
+        {
+          cwd: project.repoPath,
+          prompt: CHIEF_DIGEST_PROMPT(ticket, project.name, artifacts, knowledge),
+          model: agent.model,
+          allowedTools: agent.permissions.allowedTools,
+          disallowedTools: [...agent.permissions.disallowedTools, "Edit", "Write"],
+          denyDirs: project.holdoutsPath ? [project.holdoutsPath] : [],
+          appendSystemPrompt: agent.instructions || undefined,
+          mcpServers: mcp.servers,
+          env: AGENT_ENV,
+        },
+        (e) => void recordDispatchEvent(this.db, dispatch.id, e),
+      );
+      await finishDispatch(this.db, dispatch.id, {
+        status: result.isError ? "failed" : "succeeded",
+        verdict: result.isError ? "FAIL" : "PASS",
+        summary: result.finalText.slice(0, 2000),
+      });
+    } catch (err) {
+      await finishDispatch(this.db, dispatch.id, { status: "failed", summary: (err as Error).message.slice(0, 2000) }).catch(() => {});
+      throw err;
+    } finally {
+      mcp.release();
+      this.emit("change");
+    }
+  }
+
+  // ── conversations with the Chief of Staff ───────────────────────────────
+
+  private chatting = new Set<string>();
+
+  /** One turn of a conversation with the Chief: it can search/record knowledge and create tickets. */
+  async chat(chatId: string, message: string): Promise<void> {
+    const chat = await getChat(this.db, chatId);
+    if (!chat) throw new Error(`chat ${chatId} not found`);
+    if (this.chatting.has(chatId)) throw new Error("the Chief is still answering the previous message");
+    const env = await getEnvironment(this.db, chat.environmentId);
+    const agent = await this.agentFor("chief");
+    const adapter = this.adapters.get(agent.adapter);
+    if (!env || !adapter) throw new Error("no environment or adapter for this chat");
+    await addChatMessage(this.db, chatId, "board", message);
+    this.chatting.add(chatId);
+    this.emit("chat", { chatId, kind: "started" });
+    const mcp = this.mcpFor(agent, { environmentId: env.id });
+    const actions: Array<{ tool: string; summary: string }> = [];
+    void (async () => {
+      try {
+        const knowledge = chat.sessionId ? undefined : await this.knowledgeFor(env.id, undefined, []);
+        const { dirs } = resolveSkills(this.config.appRoot, agent.skills);
+        const result = await adapter.run(
+          {
+            cwd: env.rootPath,
+            prompt: chat.sessionId ? message : CHIEF_CHAT_PROMPT(env.name, env.rootPath, knowledge, message),
+            resumeSessionId: chat.sessionId ?? undefined,
+            model: agent.model,
+            allowedTools: agent.permissions.allowedTools,
+            disallowedTools: [...agent.permissions.disallowedTools, "Edit", "Write"],
+            denyDirs: (await listProjects(this.db)).flatMap((p) => (p.holdoutsPath ? [p.holdoutsPath] : [])),
+            skillDirs: dirs,
+            appendSystemPrompt: agent.instructions || undefined,
+            mcpServers: mcp.servers,
+            env: AGENT_ENV,
+          },
+          (e) => {
+            if (e.kind === "tool_use" && e.tool.startsWith("mcp__temper__")) {
+              const input = e.input as Record<string, unknown>;
+              actions.push({ tool: e.tool.slice("mcp__temper__".length), summary: String(input.title ?? input.query ?? input.id ?? "").slice(0, 120) });
+            }
+            this.emit("chat", { chatId, kind: "event", event: e });
+          },
+        );
+        await addChatMessage(this.db, chatId, "chief", result.finalText || "(no reply)", actions, result.sessionId);
+      } catch (err) {
+        await addChatMessage(this.db, chatId, "chief", `I hit an error: ${(err as Error).message}`, actions);
+      } finally {
+        mcp.release();
+        this.chatting.delete(chatId);
+        this.emit("chat", { chatId, kind: "finished" });
+        this.emit("change");
+      }
+    })();
+  }
+
+  isChatting(chatId: string): boolean {
+    return this.chatting.has(chatId);
   }
 
   private async cleanup(ticket: Ticket): Promise<void> {
@@ -655,7 +833,8 @@ export class Factory extends EventEmitter {
   async importSpec(projectId: string, title: string, markdown: string, autoStart = false): Promise<Ticket[]> {
     const project = await getProject(this.db, projectId);
     if (!project) throw new Error(`project ${projectId} not found`);
-    const agent = await this.agentFor("planner");
+    const agent = await this.agentFor("chief");
+    const mcp = this.mcpFor(agent, { environmentId: this.environmentOf(project) });
     const adapter = this.adapters.get(agent.adapter);
     if (!adapter) throw new Error(`adapter '${agent.adapter}' is not installed`);
     await audit(this.db, { actor: "board", kind: "spec.imported", subject: projectId, data: { title } });
@@ -663,16 +842,19 @@ export class Factory extends EventEmitter {
     const result = await adapter.run(
       {
         cwd: project.repoPath,
-        prompt: PLANNER_PROMPT(title, markdown),
+        prompt: CHIEF_INTAKE_PROMPT(title, markdown),
         model: agent.model,
         allowedTools: agent.permissions.allowedTools,
         disallowedTools: [...agent.permissions.disallowedTools, "Edit", "Write"],
         denyDirs: project.holdoutsPath ? [project.holdoutsPath] : [],
         skillDirs: dirs,
+        appendSystemPrompt: agent.instructions || undefined,
+        mcpServers: mcp.servers,
+        env: AGENT_ENV,
       },
       () => {},
-    );
-    if (result.isError) throw new Error(`planner failed: ${result.finalText.slice(0, 500)}`);
+    ).finally(() => mcp.release());
+    if (result.isError) throw new Error(`the Chief of Staff failed: ${result.finalText.slice(0, 500)}`);
     const planned = parsePlan(result.finalText);
     const ids = new Map<string, string>();
     const created: Ticket[] = [];
@@ -689,7 +871,7 @@ export class Factory extends EventEmitter {
           dependsOn: p.dependsOn.map((k) => ids.get(k)!).filter(Boolean),
           status: autoStart ? "ready" : "backlog",
         },
-        "agent:planner",
+        "agent:chief",
       );
       ids.set(p.key, t.id);
       created.push(t);

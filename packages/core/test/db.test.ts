@@ -72,7 +72,7 @@ describe("agents", () => {
   it("seeds four roles and versions edits", async () => {
     await seedAgents(db);
     const all = await listAgents(db);
-    expect(all.map((a) => a.role).sort()).toEqual(["builder", "planner", "reviewer", "verifier"]);
+    expect(all.map((a) => a.role).sort()).toEqual(["builder", "chief", "reviewer", "verifier"]);
     const builder = all.find((a) => a.id === "builder")!;
     const v2 = await saveAgent(db, { ...builder, model: "opus" });
     expect(v2.version).toBe(2);

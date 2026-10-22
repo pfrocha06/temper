@@ -14,6 +14,8 @@ export type Config = {
   appRoot: string;
   heartbeatMs: number;
   claudeBin: string;
+  /** Board token file (mode 0600). Agents are always denied this directory. */
+  secretsDir: string;
 };
 
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -30,5 +32,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     appRoot: env.TEMPER_APP_ROOT ?? appRoot,
     heartbeatMs: Number(env.TEMPER_HEARTBEAT_MS ?? 15_000),
     claudeBin: env.TEMPER_CLAUDE_BIN ?? "claude",
+    secretsDir: join(home, "secrets"),
   };
 }

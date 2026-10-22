@@ -36,6 +36,27 @@
       "when": 1792678589347,
       "tag": "0004_holdouts_setup",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792683219811,
+      "tag": "0005_environments_knowledge",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792683220260,
+      "tag": "0006_knowledge_search_and_chief",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792683456701,
+      "tag": "0007_chats_and_agent_mcp",
+      "breakpoints": true
     }
   ]
 }

@@ -4,7 +4,7 @@ start: investigate
 stages:
   - id: investigate
     kind: agent
-    role: planner
+    role: chief
     artifact: investigation.md
     readOnly: true
     instructions: |

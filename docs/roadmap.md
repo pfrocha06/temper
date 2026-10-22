@@ -12,7 +12,10 @@ itself with `temper import-spec`, or handed to the Chief of Staff in a conversat
    re-run `node apps/server/src/cli.ts probe-isolation --holdouts <holdouts>`.
 4. Never weaken a holdout to make work pass; changes to holdouts, the Verifier, skills or
    workflows that touch verification go to the board.
-5. Update this file's status column when you finish.
+5. Holdouts are shared by every in-flight ticket: a check for new behaviour must not run ahead of
+   the code. Put it in that ticket's own holdouts, or feature-detect it in the candidate
+   (`lib/candidate.mjs`) when it belongs in `baseline/`.
+6. Update this file's status column when you finish.
 
 ## Built
 
