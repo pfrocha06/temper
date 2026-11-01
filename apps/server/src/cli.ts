@@ -75,7 +75,7 @@ const help = `temper <command>
 
   open                           open the console in your browser, signed in as the board
   serve                          run the server in the foreground (development)
-  deploy [--ref main] [--source .]   build, verify and switch the service to a release
+  deploy [--ref main] [--source DIR]  build, verify and switch the service to a release
   rollback                       switch back to the previous release
   start | stop                   install/uninstall the launchd service for the current release
   status                         service, release and factory status
@@ -98,7 +98,7 @@ switch (command) {
     await import("./main.ts");
     break;
   case "deploy": {
-    const { values } = parseArgs({ args: rest, options: { ref: { type: "string", default: "main" }, source: { type: "string", default: process.cwd() } } });
+    const { values } = parseArgs({ args: rest, options: { ref: { type: "string", default: "main" }, source: { type: "string", default: config.appRoot } } });
     await deploy(values.ref!, resolve(values.source!));
     break;
   }
