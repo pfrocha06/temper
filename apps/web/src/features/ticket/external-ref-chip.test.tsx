@@ -13,6 +13,12 @@ describe("ExternalRefChip", () => {
     expect(link.getAttribute("rel")).toContain("noopener");
   });
 
+  it("shows a GitHub issue by its number, with the repository in the tooltip", () => {
+    render(<ExternalRefChip externalRef={{ tracker: "github", key: "acme/shop#13", url: "https://github.com/acme/shop/issues/13" }} />);
+    const link = screen.getByRole("link", { name: "#13" });
+    expect(link.getAttribute("title")).toBe("acme/shop#13: open in GitHub");
+  });
+
   it("renders nothing without a ref", () => {
     const { container } = render(<ExternalRefChip externalRef={null} />);
     expect(container.firstChild).toBeNull();

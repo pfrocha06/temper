@@ -21,6 +21,8 @@ export type PrBodyInput = {
   gates?: string;
   filesChanged: number;
   areas: string[];
+  /** `Closes owner/repo#N` (or `Part of …`) for the issue the ticket came from. */
+  issue?: string;
 };
 
 /** Merge risk from blast radius: how much and how widely the change reaches. */
@@ -41,6 +43,8 @@ export function prBody(input: PrBodyInput): string {
     section("Evidence", stripVerdict(input.verification)),
     section("Gates", input.gates),
     section("Review", stripVerdict(input.review)),
+    input.issue ? `${input.issue}
+` : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -92,3 +96,6 @@ export async function prState(url: string): Promise<PullRequest> {
   const { stdout } = await exec("gh", ["pr", "view", url, "--json", "url,number,state,mergeable"], { cwd: tmpdir() });
   return JSON.parse(stdout) as PullRequest;
 }
+
+export { ghIssues, repoFromRemote, TRUSTED_ASSOCIATIONS } from "./issues.ts";
+export type { GithubIssue, IssueSource } from "./issues.ts";

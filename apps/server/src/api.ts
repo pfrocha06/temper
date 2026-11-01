@@ -49,6 +49,7 @@ import { setCookie } from "hono/cookie";
 import { createAgentApi } from "./agent-api.ts";
 import { BOARD_COOKIE, type Auth } from "./auth.ts";
 import { createHealth } from "./health.ts";
+import { GithubImportError, importFromGithub } from "./github-import.ts";
 import { importFromJira, JiraImportError } from "./jira-import.ts";
 import { loadProfile, type Profile } from "./profile.ts";
 import { listProviders } from "./providers.ts";
@@ -184,6 +185,27 @@ export function createApi(db: Db, factory: Factory, config: Config, opts: { upti
       return c.json({ results: await importFromJira(deps, body) }, 201);
     } catch (e) {
       if (e instanceof JiraImportError) return c.json({ error: e.message }, 400);
+      throw e;
+    }
+  });
+
+  app.post("/api/github/import", async (c) => {
+    const body = z
+      .object({
+        projectId: z.string(),
+        issue: z.number().int().positive().optional(),
+        search: z.string().min(1).optional(),
+        repo: z.string().optional(),
+        start: z.boolean().default(false),
+        anyAuthor: z.boolean().default(false),
+        limit: z.number().int().min(1).max(100).optional(),
+      })
+      .parse(await c.req.json());
+    try {
+      const deps = { db, importSpec: (pid: string, title: string, md: string, start: boolean) => factory.importSpec(pid, title, md, start), tick: () => factory.tick() };
+      return c.json({ results: await importFromGithub(deps, body) }, 201);
+    } catch (e) {
+      if (e instanceof GithubImportError) return c.json({ error: e.message }, 400);
       throw e;
     }
   });

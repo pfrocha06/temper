@@ -63,6 +63,15 @@ export async function findOpenTicketByRef(db: Db, tracker: string, key: string):
   return row;
 }
 
+/** Every open ticket linked to this tracker and key, oldest first. */
+export async function openTicketsByRef(db: Db, tracker: string, key: string): Promise<Ticket[]> {
+  return db
+    .select()
+    .from(tickets)
+    .where(and(sql`${tickets.externalRef}->>'tracker' = ${tracker}`, sql`${tickets.externalRef}->>'key' = ${key}`, notInArray(tickets.status, ["done", "cancelled"])))
+    .orderBy(asc(tickets.createdAt));
+}
+
 export async function listTickets(db: Db, projectId?: string): Promise<Ticket[]> {
   const q = db.select().from(tickets);
   return (projectId ? q.where(eq(tickets.projectId, projectId)) : q).orderBy(asc(tickets.createdAt));

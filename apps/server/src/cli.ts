@@ -86,6 +86,8 @@ const help = `temper <command>
   project add --name N --repo PATH [--remote URL] [--holdouts PATH (default: ~/.temper/holdouts/N)] [--setup CMD] [--test CMD] [--app CMD] [--health PATH] [--holdouts-cmd CMD] [--holdouts-setup CMD]
   import-spec --project ID --file SPEC.md [--title T] [--start]
   import-jira --project ID (--issue KEY | --jql "…") [--start]
+  import-github --project ID (--issue N | --search "label:roadmap") [--repo OWNER/NAME] [--start] [--any-author]
+                                 GitHub issues as work; only issues by people who can push, unless --any-author
   probe-isolation --holdouts PATH   check runs of every enabled adapter, and the gate commands that run Builder code, cannot read holdouts or secrets, or use the board API
   codex login | logout | status  sign Temper's own Codex in or out (kept apart from ~/.codex)
   codex setup                    Windows: set up Codex's elevated sandbox for Temper (one admin prompt)
@@ -185,6 +187,32 @@ switch (command) {
     const title = values.title ?? /^#\s+(.+)$/m.exec(markdown)?.[1] ?? values.file;
     const tickets = (await call("/specs/import", { method: "POST", body: JSON.stringify({ projectId: values.project, title, markdown, autoStart: values.start }) })) as Array<{ id: string; title: string }>;
     for (const t of tickets) log(`${t.id}  ${t.title}`);
+    break;
+  }
+  case "import-github": {
+    const { values } = parseArgs({
+      args: rest,
+      options: {
+        project: { type: "string" },
+        issue: { type: "string" },
+        search: { type: "string" },
+        repo: { type: "string" },
+        start: { type: "boolean", default: false },
+        "any-author": { type: "boolean", default: false },
+      },
+    });
+    if (!values.project || !!values.issue === !!values.search) throw new Error('usage: temper import-github --project ID (--issue N | --search "…") [--repo OWNER/NAME] [--start] [--any-author]');
+    const issue = values.issue ? Number(values.issue.replace(/^#/, "")) : undefined;
+    if (issue !== undefined && !Number.isInteger(issue)) throw new Error(`not an issue number: ${values.issue}`);
+    const { results } = (await call("/github/import", {
+      method: "POST",
+      body: JSON.stringify({ projectId: values.project, issue, search: values.search, repo: values.repo, start: values.start, anyAuthor: values["any-author"] }),
+    })) as { results: Array<{ key: string; status: string; ticketIds: string[]; reason?: string }> };
+    if (!results.length) log("no matching open issues");
+    for (const r of results) {
+      if (r.status === "skipped") log(`${r.key}  skipped: ${r.reason}`);
+      else for (const id of r.ticketIds) log(`${r.key}  ${id}`);
+    }
     break;
   }
   case "import-jira": {
