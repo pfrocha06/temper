@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { SandboxMode } from "./sandbox.ts";
+import { windowsGateRoot, type SandboxMode } from "./sandbox.ts";
 
 export type Config = {
   /** Root of all Temper state: releases, instances, worktrees. */
@@ -35,7 +35,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     home,
     instance,
     dataDir: join(home, "instances", instance, "db"),
-    worktreesDir: join(home, "worktrees"),
+    // On Windows the gate sandbox cannot reach inside your profile (see sandbox.ts).
+    worktreesDir: env.TEMPER_WORKTREES ?? (process.platform === "win32" ? join(windowsGateRoot(), "worktrees", instance) : join(home, "worktrees")),
     port: Number(env.TEMPER_PORT ?? env.PORT ?? (instance === "rc" ? 4601 : 4600)),
     appRoot: env.TEMPER_APP_ROOT ?? appRoot,
     heartbeatMs: Number(env.TEMPER_HEARTBEAT_MS ?? 15_000),

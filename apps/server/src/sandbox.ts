@@ -1,5 +1,5 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
@@ -51,6 +51,22 @@ export function sandboxEnv(extra: Record<string, string> = {}, tmp?: string): No
   for (const k of KEEP_ENV) if (process.env[k] !== undefined) env[k] = process.env[k];
   if (tmp) Object.assign(env, { TMPDIR: tmp, TMP: tmp, TEMP: tmp });
   return { ...env, ...extra };
+}
+
+/**
+ * Where on Windows the sandbox can reach. srt runs the command as a separate account that may not
+ * look inside your profile, not even at the folders above a path it was granted, and Node checks
+ * every folder of a path it loads. So gate scratch dirs and worktrees live under ProgramData,
+ * which every local account can traverse; holdouts and secrets stay in your profile.
+ */
+export const windowsGateRoot = () => join(process.env.PROGRAMDATA ?? "C:\\ProgramData", "temper");
+
+/** The directory gate commands' private temp dirs are made in. */
+export function gateScratchRoot(): string {
+  if (process.platform !== "win32") return tmpdir();
+  const root = join(windowsGateRoot(), "tmp");
+  mkdirSync(root, { recursive: true });
+  return root;
 }
 
 const srtCli = () => createRequire(import.meta.url).resolve("@anthropic-ai/sandbox-runtime/dist/cli.js");
@@ -215,7 +231,7 @@ export async function sandboxed(
   opts: { cwd: string; allowWrite?: string[]; env?: Record<string, string>; expose?: number },
   platform: NodeJS.Platform = process.platform,
 ): Promise<SandboxedCommand> {
-  const tmp = mkdtempSync(join(tmpdir(), "temper-gate-tmp-"));
+  const tmp = mkdtempSync(join(gateScratchRoot(), "temper-gate-tmp-"));
   const direct = opts.expose ? `http://127.0.0.1:${opts.expose}` : undefined;
   if (sandbox.mode === "off") {
     return { file: command, args: [], shell: true, env: sandboxEnv(opts.env, tmp), url: direct, dispose: () => rmSync(tmp, { recursive: true, force: true }) };

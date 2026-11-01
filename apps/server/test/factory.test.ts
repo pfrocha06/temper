@@ -52,7 +52,7 @@ beforeEach(async () => {
   await seedAgents(db);
   const home = mkdtempSync(join(tmpdir(), "temper-home-"));
   // The fake CLI and test commands are trusted here; sandboxing itself is covered in sandbox.test.ts.
-  const config = { ...loadConfig({ TEMPER_HOME: home, TEMPER_GATE_SANDBOX: "off" }), appRoot: root, heartbeatMs: 60_000 };
+  const config = { ...loadConfig({ TEMPER_HOME: home, TEMPER_WORKTREES: join(home, "worktrees"), TEMPER_GATE_SANDBOX: "off" }), appRoot: root, heartbeatMs: 60_000 };
   factory = new Factory(db, config, new Map([["claude-cli", createClaudeCliAdapter({ bin: process.execPath, binArgs: [fakeClaude] })]]), loadWorkflows(join(root, "workflows")));
 });
 afterEach(async () => {

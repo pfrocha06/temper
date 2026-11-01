@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type { AgentAdapter } from "@temper/core";
 import { DEFAULT_AGENTS } from "@temper/core";
 import { runSandboxed } from "./exec.ts";
-import type { Sandbox } from "./sandbox.ts";
+import { gateScratchRoot, type Sandbox } from "./sandbox.ts";
 
 export type GateProbeResult = { isolated: boolean; problems: string[]; output: string };
 
@@ -46,7 +46,7 @@ export async function probeGateIsolation(sandbox: Sandbox, protectedDirs: string
   });
   const marker = `.temper-probe-write-${randomBytes(4).toString("hex")}`;
   const secret = `SECRET-${randomBytes(8).toString("hex")}`;
-  const cwd = mkdtempSync(join(tmpdir(), "temper-gate-probe-"));
+  const cwd = mkdtempSync(join(gateScratchRoot(), "temper-gate-probe-"));
   const previous = process.env.TEMPER_PROBE_SECRET;
   process.env.TEMPER_PROBE_SECRET = secret;
   try {

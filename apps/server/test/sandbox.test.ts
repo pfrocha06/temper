@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { bootApp, freePort } from "../src/app-runner.ts";
 import { runSandboxed } from "../src/exec.ts";
 import { probeGateIsolation } from "../src/probe.ts";
-import { hostRelay, LAUNCHER, sandboxed, sandboxEnv, srtNetwork, type Sandbox } from "../src/sandbox.ts";
+import { gateScratchRoot, hostRelay, LAUNCHER, sandboxed, sandboxEnv, srtNetwork, type Sandbox } from "../src/sandbox.ts";
 
 const saved = { ...process.env };
 afterEach(() => {
@@ -181,7 +181,7 @@ describe.runIf(srtAvailable)("bootApp under srt", () => {
   it("serves the sandboxed app to the host, with its variables and without the holdouts", async () => {
     const holdouts = mkdtempSync(join(tmpdir(), "holdouts-"));
     writeFileSync(join(holdouts, "secret.holdout.mjs"), "CANARY-holdout");
-    const cwd = mkdtempSync(join(tmpdir(), "wt-"));
+    const cwd = mkdtempSync(join(gateScratchRoot(), "wt-"));
     const server = `require('http').createServer((q, s) => { let h = 'denied'; try { h = require('fs').readFileSync(process.argv[1] + '/secret.holdout.mjs', 'utf8') } catch {} s.end(JSON.stringify({ token: !!process.env.TEMPER_BOARD_TOKEN, holdout: h })) }).listen(Number(process.env.PORT), '127.0.0.1')`;
     writeFileSync(join(cwd, "app.js"), server.replace("process.argv[1]", JSON.stringify(holdouts)));
     const app = await bootApp(`"${process.execPath}" app.js`, cwd, "/", { mode: "srt", denyRead: [holdouts] }, 60_000);
