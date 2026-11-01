@@ -40,6 +40,19 @@ jobs:
           pnpm --filter @temper/server exec srt windows-install
           echo TEMPER_TEST_SRT=1 >> "$GITHUB_ENV"
 
+      # The Codex adapter's permission profile, enforced by Codex's own sandbox (no login needed).
+      - name: Install the Codex CLI
+        run: |
+          npm install -g @openai/codex@0.166.0
+          mkdir -p "$HOME/.codex-test"
+          home="$HOME/.codex-test"
+          if [ "$RUNNER_OS" = Windows ]; then home="$(cygpath -w "$home")"; fi
+          echo TEMPER_TEST_CODEX=1 >> "$GITHUB_ENV"
+          echo "TEMPER_TEST_CODEX_HOME=$home" >> "$GITHUB_ENV"
+      - name: Set up the Codex Windows sandbox
+        if: runner.os == 'Windows'
+        run: codex sandbox setup --elevated --current-user --codex-home "$TEMPER_TEST_CODEX_HOME"
+
       - run: pnpm check
 
   # The one-line installers, run for real against this commit on every platform.
@@ -71,3 +84,4 @@ jobs:
           Get-Content install.ps1 -Raw | Invoke-Expression
           Get-Content install.ps1 -Raw | Invoke-Expression
           temper help
+

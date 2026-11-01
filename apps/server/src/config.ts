@@ -15,6 +15,9 @@ export type Config = {
   appRoot: string;
   heartbeatMs: number;
   claudeBin: string;
+  codexBin: string;
+  /** Temper's own CODEX_HOME (only the Codex login lives there); inside secrets, so no agent can read it. */
+  codexHome: string;
   /** Board token file (mode 0600). Agents are always denied this directory. */
   secretsDir: string;
   /** Sandbox for Builder code the server runs itself (tests, the candidate app). `off` only for development. */
@@ -41,6 +44,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     appRoot: env.TEMPER_APP_ROOT ?? appRoot,
     heartbeatMs: Number(env.TEMPER_HEARTBEAT_MS ?? 15_000),
     claudeBin: env.TEMPER_CLAUDE_BIN ?? "claude",
+    codexBin: env.TEMPER_CODEX_BIN ?? "codex",
+    codexHome: env.TEMPER_CODEX_HOME ?? join(home, "secrets", "codex"),
     secretsDir: join(home, "secrets"),
     gateSandbox: env.TEMPER_GATE_SANDBOX === "off" ? "off" : "srt",
     gateAllowRead: (env.TEMPER_GATE_ALLOW_READ ?? "").split(delimiter).filter(Boolean),

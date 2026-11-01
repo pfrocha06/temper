@@ -22,7 +22,9 @@ pnpm dev        # dev instance on :4610 (server) and :5173 (web)
 You need Node.js ≥ 22, pnpm, git, and for end-to-end runs the `gh` and `claude` CLIs. The test
 suite runs on macOS, Linux and Windows. The tests that use the real gate sandbox run on macOS by
 default; on Linux and Windows, install the sandbox (see [Platform support](README.md#platform-support))
-and set `TEMPER_TEST_SRT=1`.
+and set `TEMPER_TEST_SRT=1`. The tests that run the Codex sandbox for real need the `codex` CLI
+(`npm i -g @openai/codex`; on Windows also `temper codex setup`) and `TEMPER_TEST_CODEX=1`; they
+need no Codex login.
 
 ## How we work
 

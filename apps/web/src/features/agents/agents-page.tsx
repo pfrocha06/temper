@@ -1,17 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRightIcon, PlugZapIcon, ShieldIcon } from "lucide-react";
+import { ChevronRightIcon, PlugZapIcon, ShieldIcon, TriangleAlertIcon } from "lucide-react";
 import { useMemo } from "react";
 import { Link } from "react-router";
 import { cn } from "cn";
 import { PageHeader, QueryError, RowsSkeleton } from "@/components/query-state";
 import { ProviderLogo } from "@/components/provider-logo";
 import { RoleAvatar, roleMeta } from "@/components/role";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { agentStats, type AgentStats } from "@/lib/agent-stats";
 import { percent } from "@/lib/format";
-import { vendorOfAdapter } from "@/lib/providers";
+import { sharedVendor, VENDOR_LABEL, vendorOfAdapter } from "@/lib/providers";
 import { agentsQuery, approvalsQuery, dispatchesQuery, statusQuery } from "@/lib/queries";
 import type { Agent } from "@/lib/types";
 import { AgentEditDialog } from "./agent-edit-dialog";
@@ -28,6 +29,7 @@ export function AgentsPage() {
   const verifierPending = approvals.data?.some((a) => a.kind === "agent_change") ?? false;
   const sorted = agents.data?.toSorted((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role));
   const stats = useMemo(() => agentStats(dispatches.data ?? []), [dispatches.data]);
+  const oneVendor = sorted ? sharedVendor(sorted) : undefined;
 
   return (
     <div className="flex flex-col">
@@ -47,18 +49,32 @@ export function AgentsPage() {
       ) : sorted.length === 0 ? (
         <p className="p-6 text-sm text-muted-foreground">No agents. The server seeds the four default roles on start; restart it to restore them.</p>
       ) : (
-        <ul className="grid gap-3 p-3 md:p-6 lg:grid-cols-2 2xl:grid-cols-4">
-          {sorted.map((a) => (
-            <li key={`${a.id}@${a.version}`} className="min-w-0">
-              <AgentCard
-                agent={a}
-                stats={stats.get(a.id)}
-                active={status.data?.active.filter((x) => x.agentId === a.id).length ?? 0}
-                awaitingApproval={a.role === "verifier" && verifierPending}
-              />
-            </li>
-          ))}
-        </ul>
+        <>
+          {oneVendor ? (
+            <div className="px-3 pt-3 md:px-6 md:pt-6">
+              <Alert>
+                <TriangleAlertIcon />
+                <AlertTitle>Builder and Verifier both run on {VENDOR_LABEL[oneVendor]}</AlertTitle>
+                <AlertDescription>
+                  The work and its proof come from one model family, so their blind spots line up. Give the Verifier a different adapter, such as
+                  Codex, so another vendor checks the Builder (ADR 6).
+                </AlertDescription>
+              </Alert>
+            </div>
+          ) : null}
+          <ul className="grid gap-3 p-3 md:p-6 lg:grid-cols-2 2xl:grid-cols-4">
+            {sorted.map((a) => (
+              <li key={`${a.id}@${a.version}`} className="min-w-0">
+                <AgentCard
+                  agent={a}
+                  stats={stats.get(a.id)}
+                  active={status.data?.active.filter((x) => x.agentId === a.id).length ?? 0}
+                  awaitingApproval={a.role === "verifier" && verifierPending}
+                />
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </div>
   );

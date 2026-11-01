@@ -1,5 +1,9 @@
 # Second agent vendor behind the adapter
 
+Status: built. `packages/adapters/codex-cli`; account and adapter checks in `Factory.adapterRefusal`;
+the vendor warning on the Agents screen (`sharedVendor`). The Thermostat named in AC-3 is that
+warning: the temperature itself has no vendor signal.
+
 ## Why
 All roles run on one vendor, so their blind spots are correlated (flagged in ADR 6). A different
 vendor for the Verifier and Reviewer strengthens separation of powers.

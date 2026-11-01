@@ -1,5 +1,7 @@
 import type { Agent } from "@temper/core";
 import { run } from "./exec.ts";
+import { codexAccount, resolveBin } from "@temper/adapter-codex-cli";
+import type { Config } from "./config.ts";
 import type { Profile } from "./profile.ts";
 
 export type ToolStatus = "ok" | "missing" | "error";
@@ -36,9 +38,12 @@ async function version(cmd: string, args: string[]): Promise<{ status: ToolStatu
 }
 
 /** What agents can use, and what is installed: never includes secret values, only their names. */
-export async function inventory(profile: Profile, agents: Agent[], claudeBin: string): Promise<ToolsInventory> {
+export async function inventory(profile: Profile, agents: Agent[], config: Pick<Config, "claudeBin" | "codexBin" | "codexHome">): Promise<ToolsInventory> {
   const rolesWith = (name: string) => agents.filter((a) => a.mcpServers.includes(name)).map((a) => a.role);
-  const claude = await version(claudeBin, ["--version"]);
+  const claude = await version(config.claudeBin, ["--version"]);
+  const codexBin = resolveBin(config.codexBin);
+  const codex = await version(codexBin.file, [...codexBin.args, "--version"]);
+  const codexLogin = codexAccount(config.codexHome);
   const github = profile.github?.user;
   return {
     adapters: [
@@ -48,6 +53,18 @@ export async function inventory(profile: Profile, agents: Agent[], claudeBin: st
         isolated: true,
         note: "Each run uses the logged-in CLI with only Temper-assigned skills and MCP servers; no user skills, plugins, hooks or memory.",
       },
+      ...(profile.adapters.includes("codex-cli") || codex.status === "ok"
+        ? [
+            {
+              id: "codex-cli",
+              ...codex,
+              isolated: true,
+              note: codexLogin.loggedIn
+                ? "Each run uses Temper's own Codex login (not ~/.codex) with only Temper-assigned skills and MCP servers; no user config, AGENTS.md, hooks, plugins or memories."
+                : "Not signed in for Temper: run `temper codex login`. Temper keeps its own Codex login, apart from ~/.codex.",
+            },
+          ]
+        : []),
     ],
     clis: await Promise.all(CLIS.map(async (c) => ({ name: c.name, purpose: c.purpose, ...(await version(c.name, c.args)) }))),
     mcpServers: [

@@ -13,5 +13,9 @@ where possible, different models per role. The adapter interface keeps Codex / G
 OpenCode drop-in.
 
 ## Consequences
-Correlated blind spots across roles are a known weakness; the Thermostat surfaces it until a
-second vendor is configured.
+Correlated blind spots across roles are a known weakness; the Agents screen flags it while the
+Builder and Verifier share a vendor.
+
+## Update
+The `codex-cli` adapter ([spec 0011](../specs/0011-second-vendor.md)) is the second vendor. v0's
+default stays all-Claude; the board moves the Verifier or Reviewer to Codex per agent.

@@ -3,6 +3,7 @@ import type { Agent, AgentEdit } from "@/lib/types";
 
 export type AgentFormValues = {
   name: string;
+  adapter: string;
   model: string;
   skills: string[];
   mcpServers: string[];
@@ -16,6 +17,7 @@ export type AgentFormValues = {
 export function toFormValues(a: Agent): AgentFormValues {
   return {
     name: a.name,
+    adapter: a.adapter,
     model: a.model ?? "",
     skills: a.skills,
     mcpServers: a.mcpServers ?? [],
@@ -48,6 +50,7 @@ export function toAgentEdit(v: AgentFormValues): { edit?: AgentEdit; errors: For
     errors,
     edit: {
       name: v.name.trim(),
+      adapter: v.adapter,
       model: v.model.trim() || null,
       skills: v.skills,
       mcpServers: v.mcpServers,

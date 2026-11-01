@@ -1,4 +1,5 @@
 import { getCaps, latestLimits, usageWindows, type Agent, type Db, type ProviderCaps } from "@temper/core";
+import { codexAccount, resolveBin } from "@temper/adapter-codex-cli";
 import { run } from "./exec.ts";
 
 export type ProviderInfo = {
@@ -7,6 +8,8 @@ export type ProviderInfo = {
   vendor: "anthropic" | "openai" | "google" | "opencode";
   /** Whether Temper has an adapter for it yet. */
   adapter: boolean;
+  /** Whether the profile lets Temper dispatch to it. */
+  enabled: boolean;
   installed: boolean;
   version?: string;
   account?: { loggedIn: boolean; method?: string; email?: string; org?: string; subscription?: string };
@@ -19,18 +22,20 @@ export type ProviderInfo = {
 
 const KNOWN = [
   { id: "claude-cli", name: "Claude Code", vendor: "anthropic", bin: "claude", adapter: true },
-  { id: "codex-cli", name: "Codex", vendor: "openai", bin: "codex", adapter: false },
+  { id: "codex-cli", name: "Codex", vendor: "openai", bin: "codex", adapter: true },
   { id: "gemini-cli", name: "Gemini CLI", vendor: "google", bin: "gemini", adapter: false },
   { id: "opencode", name: "OpenCode", vendor: "opencode", bin: "opencode", adapter: false },
 ] as const;
 
 async function versionOf(bin: string): Promise<string | undefined> {
-  const r = await run(bin, ["--version"], { cwd: process.cwd(), timeoutMs: 10_000 });
+  // npm installs Codex as a .cmd shim on Windows, which Node cannot spawn without a shell.
+  const { file, args } = resolveBin(bin);
+  const r = await run(file, [...args, "--version"], { cwd: process.cwd(), timeoutMs: 10_000 });
   return r.code === 0 ? (r.stdout || r.stderr).trim().split("\n")[0]?.slice(0, 60) : undefined;
 }
 
 /** `claude auth status` without identifiers Temper does not need (org id, directories). */
-async function claudeAccount(bin: string): Promise<ProviderInfo["account"]> {
+export async function claudeAccount(bin: string): Promise<ProviderInfo["account"]> {
   const r = await run(bin, ["auth", "status"], { cwd: process.cwd(), timeoutMs: 15_000 });
   try {
     const s = JSON.parse(r.stdout) as { loggedIn?: boolean; authMethod?: string; email?: string; orgName?: string; subscriptionType?: string };
@@ -40,10 +45,16 @@ async function claudeAccount(bin: string): Promise<ProviderInfo["account"]> {
   }
 }
 
-export async function listProviders(db: Db, agents: Agent[], opts: { claudeBin: string; pausedAdapters: Record<string, number> }): Promise<ProviderInfo[]> {
+/** Temper's own Codex login (not the user's ~/.codex). */
+function codexLogin(codexHome: string): ProviderInfo["account"] {
+  const a = codexAccount(codexHome);
+  return { loggedIn: a.loggedIn, method: a.method, email: a.email, subscription: a.plan };
+}
+
+export async function listProviders(db: Db, agents: Agent[], opts: { claudeBin: string; codexBin: string; codexHome: string; enabled: string[]; pausedAdapters: Record<string, number> }): Promise<ProviderInfo[]> {
   return Promise.all(
     KNOWN.map(async (k) => {
-      const bin = k.id === "claude-cli" ? opts.claudeBin : k.bin;
+      const bin = k.id === "claude-cli" ? opts.claudeBin : k.id === "codex-cli" ? opts.codexBin : k.bin;
       const version = await versionOf(bin);
       const caps = await getCaps(db, k.id);
       const paused = opts.pausedAdapters[k.id];
@@ -52,9 +63,10 @@ export async function listProviders(db: Db, agents: Agent[], opts: { claudeBin: 
         name: k.name,
         vendor: k.vendor,
         adapter: k.adapter,
+        enabled: opts.enabled.includes(k.id),
         installed: !!version,
         version,
-        account: k.id === "claude-cli" && version ? await claudeAccount(bin) : undefined,
+        account: !version ? undefined : k.id === "claude-cli" ? await claudeAccount(bin) : k.id === "codex-cli" ? codexLogin(opts.codexHome) : undefined,
         roles: agents.filter((a) => a.adapter === k.id).map((a) => a.role),
         usage: k.adapter ? await usageWindows(db, k.id, caps) : undefined,
         limits: (await latestLimits(db, k.id)).map((l) => ({

@@ -91,7 +91,7 @@ function StateBadge({ provider }: { provider: ProviderInfo }) {
   return (
     <Badge
       variant="outline"
-      className={cn(state === "active" ? "border-pass/40 text-pass" : state === "no_adapter" ? "text-muted-foreground" : "border-dashed text-muted-foreground")}
+      className={cn(state === "active" ? "border-pass/40 text-pass" : state === "no_adapter" || state === "not_enabled" ? "text-muted-foreground" : "border-dashed text-muted-foreground")}
     >
       <Icon data-icon="inline-start" />
       {STATE_LABEL[state]}

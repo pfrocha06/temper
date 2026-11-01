@@ -16,6 +16,7 @@
     "@anthropic-ai/sandbox-runtime": "0.0.78",
     "@hono/node-server": "^2.1.5",
     "@temper/adapter-claude-cli": "workspace:*",
+    "@temper/adapter-codex-cli": "workspace:*",
     "@temper/core": "workspace:*",
     "@temper/plugin-github": "workspace:*",
     "drizzle-orm": "0.45.4",

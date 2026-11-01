@@ -85,6 +85,7 @@ export type SkillEntry = {
 
 export type AgentEdit = {
   name: string;
+  adapter?: string;
   model: string | null;
   skills: string[];
   mcpServers: string[];

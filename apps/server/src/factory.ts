@@ -88,7 +88,14 @@ import type { Profile } from "./profile.ts";
 import { buildPrompt, CHIEF_CHAT_PROMPT, CHIEF_DIGEST_PROMPT, CHIEF_INTAKE_PROMPT, FEEDBACK_ARTIFACT } from "./prompt.ts";
 import { resolveSkills } from "./skills.ts";
 
-export type FactoryOptions = { auth?: Auth; profile?: Profile };
+export type FactoryOptions = {
+  auth?: Auth;
+  profile?: Profile;
+  /** The account an adapter's CLI is signed in as (email), for profiles that pin one. */
+  accountOf?: (adapter: string) => Promise<string | undefined>;
+};
+
+const ACCOUNT_CHECK_MS = 5 * 60_000;
 
 type AgentStage = Extract<Stage, { kind: "agent" }>;
 type GateStage = Extract<Stage, { kind: "gate" }>;
@@ -139,6 +146,11 @@ export class Factory extends EventEmitter {
     this.options = options;
   }
 
+  /** Adapters this server can run. */
+  adapterIds(): string[] {
+    return [...this.adapters.keys()];
+  }
+
   // ── context for agent runs: capability, MCP servers, shared knowledge ────
 
   private environmentOf(project: Project): string {
@@ -187,6 +199,53 @@ export class Factory extends EventEmitter {
   }
 
   private capNotices = new Set<string>();
+  private refusalNotices = new Set<string>();
+  private accounts = new Map<string, { email: string | undefined; at: number }>();
+
+  /**
+   * Why work may not go to an adapter, or undefined when it may: the profile must enable it, and
+   * when the profile pins an account for it, the CLI must be signed in as exactly that account.
+   */
+  async adapterRefusal(adapter: string): Promise<string | undefined> {
+    const profile = this.options.profile;
+    const enabled = profile?.adapters ?? ["claude-cli"];
+    if (!enabled.includes(adapter)) return `profile "${profile?.name ?? "default"}" does not allow the ${adapter} adapter`;
+    if (!this.adapters.has(adapter)) return `adapter '${adapter}' is not installed`;
+    const pinned = profile?.accounts?.[adapter];
+    if (!pinned) return undefined;
+    let cached = this.accounts.get(adapter);
+    if (!cached || Date.now() - cached.at > ACCOUNT_CHECK_MS) {
+      cached = { email: await this.options.accountOf?.(adapter).catch(() => undefined), at: Date.now() };
+      this.accounts.set(adapter, cached);
+    }
+    if (cached.email?.toLowerCase() !== pinned.toLowerCase()) {
+      return `${adapter} is signed in as ${cached.email ?? "nobody"}, but profile "${profile?.name ?? "default"}" allows only ${pinned}`;
+    }
+    return undefined;
+  }
+
+  /** The adapter for an agent's run, refused (audited, the board told once a day) when not allowed. */
+  private async adapterFor(agent: Agent): Promise<AgentAdapter> {
+    const refusal = await this.adapterRefusal(agent.adapter);
+    if (refusal) {
+      await this.refuse(agent, refusal);
+      throw new Error(`dispatch refused: ${refusal}`);
+    }
+    return this.adapters.get(agent.adapter)!;
+  }
+
+  private async refuse(agent: Agent, reason: string): Promise<void> {
+    const key = `${agent.id}:${reason}:${new Date().toDateString()}`;
+    if (this.refusalNotices.has(key)) return;
+    this.refusalNotices.add(key);
+    await audit(this.db, { actor: "system", kind: "dispatch.refused", subject: agent.adapter, data: { agent: agent.id, role: agent.role, reason } });
+    await requestApproval(this.db, {
+      kind: "notice",
+      title: `${agent.name} gets no work: ${reason}`,
+      body: "Temper only dispatches to adapters the profile allows, signed in as the account it names. Change the agent's adapter on the Agents screen, or fix the profile or the CLI's login.",
+      options: ["dismiss"],
+    });
+  }
 
   /** A provider at one of its board-set caps takes no new work; the board hears about it once per window. */
   private async providerCapped(adapter: string): Promise<boolean> {
@@ -350,6 +409,11 @@ export class Factory extends EventEmitter {
     const active = [...this.active.values()];
     if (stage.kind === "gate") return active.filter((a) => a.role === "server").length < MAX_GATE_CONCURRENCY;
     const agent = await this.agentFor(stage.role);
+    const refusal = await this.adapterRefusal(agent.adapter);
+    if (refusal) {
+      await this.refuse(agent, refusal);
+      return false;
+    }
     if ((this.pausedAdapters.get(agent.adapter) ?? 0) > Date.now()) return false;
     if (await this.providerCapped(agent.adapter)) return false;
     if (active.filter((a) => a.agentId === agent.id).length >= agent.maxConcurrency) return false;
@@ -479,8 +543,7 @@ export class Factory extends EventEmitter {
 
   private async runAgentStage(ticket: Ticket, stage: AgentStage, agent: Agent, dispatchId: string, signal: AbortSignal): Promise<StageOutcome> {
     const project = await this.project(ticket);
-    const adapter = this.adapters.get(agent.adapter);
-    if (!adapter) throw new Error(`adapter '${agent.adapter}' is not installed`);
+    const adapter = await this.adapterFor(agent);
     const artifacts = await latestArtifacts(this.db, ticket.id);
 
     // Feedback reaches only the stage that is retrying, and only if newer than its last output.
@@ -506,6 +569,9 @@ export class Factory extends EventEmitter {
       addDirs.push(worktree);
       disallowed.push(`Edit(${worktree}/**)`, `Write(${worktree}/**)`);
       holdoutsBefore = await headSha(cwd);
+      if (project.appCommand && adapter.reachesHostLoopback === false) {
+        return { verdict: "BLOCKED", summary: `The ${agent.adapter} adapter cannot reach the candidate app from its sandbox on this platform. Run the Verifier on another adapter (Agents screen).` };
+      }
       if (project.appCommand) {
         const sandbox = await this.sandboxFor(project);
         app = await bootApp(project.appCommand, worktree, project.appHealthPath, sandbox).catch(() => undefined);
@@ -549,6 +615,8 @@ export class Factory extends EventEmitter {
           disallowedTools: stage.readOnly ? [...disallowed, "Edit", "Write"] : disallowed,
           addDirs,
           denyDirs,
+          readOnlyDirs: stage.role === "verifier" ? [worktree] : undefined,
+          readOnly: stage.readOnly || undefined,
           hostLoopback: appViaProxy,
           skillDirs,
           appendSystemPrompt: agent.instructions || undefined,
@@ -778,8 +846,9 @@ export class Factory extends EventEmitter {
     if (!ticket) return;
     const project = await this.project(ticket);
     const agent = await this.agentFor("chief");
-    const adapter = this.adapters.get(agent.adapter);
-    if (!adapter || !agent.mcpServers.includes("temper") || !this.options.auth) return;
+    if (!agent.mcpServers.includes("temper") || !this.options.auth) return;
+    const adapter = await this.adapterFor(agent).catch(() => undefined);
+    if (!adapter) return;
     const environmentId = this.environmentOf(project);
     const dispatch = await createDispatch(this.db, { ticketId, stage: "digest", agentId: agent.id, agentVersion: agent.version });
     const mcp = this.mcpFor(agent, { environmentId, projectId: project.id, dispatchId: dispatch.id });
@@ -825,8 +894,8 @@ export class Factory extends EventEmitter {
     if (this.chatting.has(chatId)) throw new Error("the Chief is still answering the previous message");
     const env = await getEnvironment(this.db, chat.environmentId);
     const agent = await this.agentFor("chief");
-    const adapter = this.adapters.get(agent.adapter);
-    if (!env || !adapter) throw new Error("no environment or adapter for this chat");
+    if (!env) throw new Error("no environment for this chat");
+    const adapter = await this.adapterFor(agent);
     await addChatMessage(this.db, chatId, "board", message);
     this.chatting.add(chatId);
     this.emit("chat", { chatId, kind: "started" });
@@ -986,8 +1055,7 @@ export class Factory extends EventEmitter {
     if (!project) throw new Error(`project ${projectId} not found`);
     const agent = await this.agentFor("chief");
     const mcp = this.mcpFor(agent, { environmentId: this.environmentOf(project) });
-    const adapter = this.adapters.get(agent.adapter);
-    if (!adapter) throw new Error(`adapter '${agent.adapter}' is not installed`);
+    const adapter = await this.adapterFor(agent);
     await audit(this.db, { actor: "board", kind: "spec.imported", subject: projectId, data: { title } });
     const { dirs } = resolveSkills(this.config.appRoot, agent.skills);
     const result = await adapter.run(

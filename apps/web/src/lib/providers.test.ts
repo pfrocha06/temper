@@ -12,6 +12,7 @@ import {
   resetClock,
   modelBreakdown,
   providerState,
+  sharedVendor,
   usageWindowViews,
   vendorOfAdapter,
   type ProviderInfo,
@@ -130,6 +131,14 @@ describe("providers", () => {
     expect(providerState({ adapter: true, installed: true })).toBe("active");
     expect(providerState({ adapter: false, installed: true })).toBe("no_adapter");
     expect(providerState({ adapter: true, installed: false })).toBe("not_installed");
+    expect(providerState({ adapter: true, installed: true, enabled: false })).toBe("not_enabled");
+  });
+
+  it("flags a Builder and Verifier on one vendor (spec 0011, AC-3)", () => {
+    const agents = (verifier: string) => [{ role: "chief", adapter: "claude-cli" }, { role: "builder", adapter: "claude-cli" }, { role: "verifier", adapter: verifier }];
+    expect(sharedVendor(agents("claude-cli"))).toBe("anthropic");
+    expect(sharedVendor(agents("codex-cli"))).toBeUndefined();
+    expect(sharedVendor([])).toBeUndefined();
   });
 });
 
