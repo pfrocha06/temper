@@ -1,0 +1,8 @@
+{
+  "name": "holdouts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "holdouts": "node run.mjs"
+  }
+}
