@@ -36,9 +36,15 @@ export type SandboxedCommand = {
 
 /**
  * Environment a sandboxed command keeps. Everything else (git host and API tokens, the board
- * token, TEMPER_*) is dropped: the command is the Builder's code.
+ * token, TEMPER_*) is dropped: the command is the Builder's code. The Windows profile variables
+ * are for srt itself (it keeps per-user state under LOCALAPPDATA); on Windows srt hands the
+ * command a fresh environment of its own, so they do not reach it.
  */
-const KEEP_ENV = ["PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TZ", "CI", "PNPM_HOME", "SYSTEMROOT", "COMSPEC", "PATHEXT"];
+const KEEP_ENV = [
+  "PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TZ", "CI", "PNPM_HOME",
+  "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "PATHEXT", "USERPROFILE", "USERNAME", "USERDOMAIN",
+  "LOCALAPPDATA", "APPDATA", "PROGRAMDATA", "PROGRAMFILES", "PROGRAMFILES(X86)", "PROCESSOR_ARCHITECTURE", "NUMBER_OF_PROCESSORS",
+];
 
 export function sandboxEnv(extra: Record<string, string> = {}, tmp?: string): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
