@@ -5,3 +5,4 @@ packages:
   - plugins/*
 allowBuilds:
   esbuild: false
+shellEmulator: true

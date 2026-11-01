@@ -51,8 +51,9 @@ beforeEach(async () => {
   ({ db, close } = await openDb());
   await seedAgents(db);
   const home = mkdtempSync(join(tmpdir(), "temper-home-"));
-  const config = { ...loadConfig({ TEMPER_HOME: home }), appRoot: root, heartbeatMs: 60_000 };
-  factory = new Factory(db, config, new Map([["claude-cli", createClaudeCliAdapter({ bin: fakeClaude })]]), loadWorkflows(join(root, "workflows")));
+  // The fake CLI and test commands are trusted here; sandboxing itself is covered in sandbox.test.ts.
+  const config = { ...loadConfig({ TEMPER_HOME: home, TEMPER_WORKTREES: join(home, "worktrees"), TEMPER_GATE_SANDBOX: "off" }), appRoot: root, heartbeatMs: 60_000 };
+  factory = new Factory(db, config, new Map([["claude-cli", createClaudeCliAdapter({ bin: process.execPath, binArgs: [fakeClaude] })]]), loadWorkflows(join(root, "workflows")));
 });
 afterEach(async () => {
   await factory.stop();
@@ -69,9 +70,10 @@ describe("feature ticket end to end", () => {
       name: "demo",
       repoPath: repo,
       holdoutsPath: holdouts,
-      setupCommand: "true",
-      testCommand: "test -f hello.txt",
-      holdoutsCommand: "sh check.sh",
+      // Node one-liners rather than sh, so the test runs on every platform.
+      setupCommand: "node --version",
+      testCommand: `node -e "process.exit(require('fs').existsSync('hello.txt') ? 0 : 1)"`,
+      holdoutsCommand: "node check.mjs",
     });
     const ticket = await createTicket(db, {
       projectId: project.id,

@@ -6,8 +6,8 @@ import { parseArgs } from "node:util";
 import { createClaudeCliAdapter } from "@temper/adapter-claude-cli";
 import { join } from "node:path";
 import { loadBoardToken } from "./auth.ts";
-import { loadConfig } from "./config.ts";
-import { probeIsolation } from "./probe.ts";
+import { loadConfig, protectedDirs } from "./config.ts";
+import { probeGateIsolation, probeIsolation } from "./probe.ts";
 import { activate, backupDatabase, buildRelease, readState, restoreDatabase, waitHealthy, waitStopped } from "./releases.ts";
 import { run } from "./exec.ts";
 import { installService, serviceInstalled, uninstallService } from "./service.ts";
@@ -83,13 +83,14 @@ const help = `temper <command>
   project add --name N --repo PATH [--remote URL] [--holdouts PATH] [--setup CMD] [--test CMD] [--app CMD] [--health PATH] [--holdouts-cmd CMD] [--holdouts-setup CMD]
   import-spec --project ID --file SPEC.md [--title T] [--start]
   import-jira --project ID (--issue KEY | --jql "…") [--start]
-  probe-isolation --holdouts PATH   check a Builder run cannot read holdouts or secrets, or use the board API
+  probe-isolation --holdouts PATH   check a Builder run, and the gate commands that run its code, cannot read holdouts or secrets, or use the board API
 `;
 
 switch (command) {
   case "open": {
     const url = `http://127.0.0.1:${config.port}/auth?token=${encodeURIComponent(boardToken())}`;
-    await run("open", [url], { cwd: config.home });
+    const [opener, ...openArgs] = process.platform === "darwin" ? ["open"] : process.platform === "win32" ? ["cmd", "/c", "start", '""'] : ["xdg-open"];
+    await run(opener!, [...openArgs, url], { cwd: config.home });
     log(`opened the console; to sign in another browser use:\n${url}`);
     break;
   }
@@ -212,6 +213,13 @@ switch (command) {
     else log("✓ isolated: no protected canary was readable and the board API refused the agent");
     if (r.leaked || r.apiOpen || inconclusive) {
       log(r.transcript.slice(-3000));
+      process.exitCode = 1;
+    }
+    // The server also runs Builder code itself (tests, the candidate app): probe that path too.
+    const gate = await probeGateIsolation({ mode: config.gateSandbox, denyRead: [], allowRead: config.gateAllowRead }, [resolve(values.holdouts), ...protectedDirs(config)], `http://127.0.0.1:${config.port}`);
+    if (gate.isolated) log("✓ gate commands isolated: no canary readable, no writes, no server environment, no board API, no internet");
+    else {
+      log(`✗ GATE LEAK${config.gateSandbox === "off" ? " (TEMPER_GATE_SANDBOX=off)" : ""}:\n${gate.problems.map((p) => `  - ${p}`).join("\n")}\n${gate.output.slice(-3000)}`);
       process.exitCode = 1;
     }
     break;

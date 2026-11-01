@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import type { GateCheck, Project, RunEvent, Ticket, Verdict } from "@temper/core";
 import { bootApp } from "../app-runner.ts";
-import { run, runShell } from "../exec.ts";
+import { run, runSandboxed, runShell } from "../exec.ts";
+import type { Sandbox } from "../sandbox.ts";
 import { changedFiles, commitsAhead, diff, hasUncommittedChanges, headSha } from "../git.ts";
 import { diffGuard, isTestFile } from "./diff-guard.ts";
 import { builderFeedback, parseHoldoutResults } from "./holdout-results.ts";
@@ -14,6 +15,8 @@ export type GateContext = {
   project: Project;
   ticket: Ticket;
   worktree: string;
+  /** Confines the Builder's code (the test command, the candidate app). */
+  sandbox: Sandbox;
   /** Merged tickets whose holdouts run as regression checks. */
   regressionTickets?: string[];
   signal?: AbortSignal;
@@ -34,7 +37,9 @@ export async function builderTests(ctx: GateContext): Promise<CheckResult> {
   if ((await commitsAhead(ctx.worktree, ctx.project.defaultBranch)) === 0) {
     return { check: "builder_tests", ok: false, report: "No commits on the ticket branch.", builderFeedback: "No commits were made." };
   }
-  const r = await runShell(ctx.project.testCommand, { cwd: ctx.worktree, signal: ctx.signal, timeoutMs: 20 * 60_000, onOutput: ctx.onOutput });
+  // The tests are the Builder's code and their output goes back to the Builder: run them where
+  // they cannot read holdouts or secrets.
+  const r = await runSandboxed(ctx.project.testCommand, ctx.sandbox, { cwd: ctx.worktree, signal: ctx.signal, timeoutMs: 20 * 60_000, onOutput: ctx.onOutput });
   const sha = await headSha(ctx.worktree);
   const outHash = createHash("sha256").update(r.stdout + r.stderr).digest("hex").slice(0, 12);
   const ok = r.code === 0;
@@ -79,7 +84,7 @@ export async function holdouts(ctx: GateContext): Promise<CheckResult> {
   }
   let app: Awaited<ReturnType<typeof bootApp>> | undefined;
   try {
-    if (project.appCommand) app = await bootApp(project.appCommand, ctx.worktree, project.appHealthPath);
+    if (project.appCommand) app = await bootApp(project.appCommand, ctx.worktree, project.appHealthPath, ctx.sandbox);
     const r = await runShell(project.holdoutsCommand, {
       cwd: project.holdoutsPath,
       env: { ...process.env, TEMPER_APP_URL: app?.url ?? "", TEMPER_APP_TOKEN: app?.token ?? "", TEMPER_CANDIDATE_PATH: ctx.worktree, TEMPER_TICKET_ID: ctx.ticket.id, TEMPER_REGRESSION_TICKETS: (ctx.regressionTickets ?? []).join(",") },

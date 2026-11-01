@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -53,7 +53,8 @@ describe("mcp", () => {
     const req = { cwd: "/w", prompt: "x", allowedTools: ["Read"], disallowedTools: [], mcpServers: { temper: { command: "node", args: ["s.ts"] } } };
     const file = writeMcpConfig(req);
     expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({ mcpServers: { temper: { command: "node", args: ["s.ts"] } } });
-    expect(statSync(file).mode & 0o777).toBe(0o600);
+    // Windows has no POSIX modes; the file sits in the user's own temp dir there.
+    if (process.platform !== "win32") expect(statSync(file).mode & 0o777).toBe(0o600);
     const args = buildArgs(req, undefined, file);
     expect(args).toEqual(expect.arrayContaining(["--strict-mcp-config", "--mcp-config", file, "mcp__temper"]));
   });
@@ -72,11 +73,11 @@ describe("buildSkillPlugin", () => {
 
 describe("run", () => {
   it("streams events from the CLI and returns the final text", async () => {
-    const bin = join(mkdtempSync(join(tmpdir(), "fake-claude-")), "claude");
-    writeFileSync(bin, `#!/bin/sh\ncat "${fixture}"\n`);
-    chmodSync(bin, 0o755);
+    // A Node script stands in for the CLI, so the test runs on every platform.
+    const script = join(mkdtempSync(join(tmpdir(), "fake-claude-")), "claude.mjs");
+    writeFileSync(script, `import { readFileSync } from "node:fs";\nprocess.stdout.write(readFileSync(${JSON.stringify(fixture)}, "utf8"));\n`);
     const events: RunEvent[] = [];
-    const result = await createClaudeCliAdapter({ bin }).run(
+    const result = await createClaudeCliAdapter({ bin: process.execPath, binArgs: [script] }).run(
       { cwd: tmpdir(), prompt: "x", allowedTools: [], disallowedTools: [] },
       (e) => events.push(e),
     );

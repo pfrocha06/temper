@@ -1,6 +1,7 @@
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { windowsGateRoot, type SandboxMode } from "./sandbox.ts";
 
 export type Config = {
   /** Root of all Temper state: releases, instances, worktrees. */
@@ -16,7 +17,14 @@ export type Config = {
   claudeBin: string;
   /** Board token file (mode 0600). Agents are always denied this directory. */
   secretsDir: string;
+  /** Sandbox for Builder code the server runs itself (tests, the candidate app). `off` only for development. */
+  gateSandbox: SandboxMode;
+  /** Extra paths gate commands may read (Windows: per-user tool installs the sandbox account cannot see). */
+  gateAllowRead: string[];
 };
+
+/** Temper's own secrets and data: no agent run and no sandboxed gate command may read them. */
+export const protectedDirs = (c: Config) => [c.secretsDir, join(c.home, "instances"), join(c.home, "backups")];
 
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -27,11 +35,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     home,
     instance,
     dataDir: join(home, "instances", instance, "db"),
-    worktreesDir: join(home, "worktrees"),
+    // On Windows the gate sandbox cannot reach inside your profile (see sandbox.ts).
+    worktreesDir: env.TEMPER_WORKTREES ?? (process.platform === "win32" ? join(windowsGateRoot(), "worktrees", instance) : join(home, "worktrees")),
     port: Number(env.TEMPER_PORT ?? env.PORT ?? (instance === "rc" ? 4601 : 4600)),
     appRoot: env.TEMPER_APP_ROOT ?? appRoot,
     heartbeatMs: Number(env.TEMPER_HEARTBEAT_MS ?? 15_000),
     claudeBin: env.TEMPER_CLAUDE_BIN ?? "claude",
     secretsDir: join(home, "secrets"),
+    gateSandbox: env.TEMPER_GATE_SANDBOX === "off" ? "off" : "srt",
+    gateAllowRead: (env.TEMPER_GATE_ALLOW_READ ?? "").split(delimiter).filter(Boolean),
   };
 }

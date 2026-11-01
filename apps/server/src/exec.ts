@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { sandboxed, type Sandbox } from "./sandbox.ts";
 
 export type ExecResult = { code: number | null; stdout: string; stderr: string; timedOut: boolean };
 
@@ -20,6 +21,23 @@ export function runShell(
   opts: { cwd: string; env?: NodeJS.ProcessEnv; timeoutMs?: number; signal?: AbortSignal; onOutput?: (chunk: string) => void },
 ): Promise<ExecResult> {
   return runProcess(spawn(command, { cwd: opts.cwd, env: opts.env ?? process.env, shell: true, signal: opts.signal }), opts.timeoutMs, opts.onOutput);
+}
+
+/**
+ * Runs a project command line that executes Builder-controlled code (the test command) inside
+ * the sandbox, with a stripped environment. See `sandbox.ts`.
+ */
+export async function runSandboxed(
+  command: string,
+  sandbox: Sandbox,
+  opts: { cwd: string; env?: Record<string, string>; timeoutMs?: number; signal?: AbortSignal; onOutput?: (chunk: string) => void },
+): Promise<ExecResult> {
+  const cmd = await sandboxed(sandbox, command, { cwd: opts.cwd, env: opts.env });
+  try {
+    return await runProcess(spawn(cmd.file, cmd.args, { cwd: opts.cwd, env: cmd.env, shell: cmd.shell, signal: opts.signal }), opts.timeoutMs, opts.onOutput);
+  } finally {
+    cmd.dispose();
+  }
 }
 
 const CAP = 2_000_000;

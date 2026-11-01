@@ -63,7 +63,9 @@ import {
 } from "@temper/core";
 import { createPullRequest, deleteRemoteBranch, mergePullRequest, prBody, prState } from "@temper/plugin-github";
 import { bootApp } from "./app-runner.ts";
-import type { Config } from "./config.ts";
+import { protectedDirs, type Config } from "./config.ts";
+import { probeGateIsolation, type GateProbeResult } from "./probe.ts";
+import type { Sandbox } from "./sandbox.ts";
 import { diffGuard } from "./gates/diff-guard.ts";
 import { builderFeedback as holdoutFeedback, parseHoldoutResults } from "./gates/holdout-results.ts";
 import { runShell } from "./exec.ts";
@@ -214,9 +216,53 @@ export class Factory extends EventEmitter {
     return knowledgeDigest(entries);
   }
 
+  // ── the sandbox for Builder code the server runs (tests, the candidate app) ──
+
+  private gateProbe: Promise<GateProbeResult> | undefined;
+  private gateNoticeSent = false;
+
+  /**
+   * The sandbox for one project's gate commands. With srt on, the first use runs the gate
+   * isolation probe; if it fails, every stage that would run Builder code goes to the board.
+   */
+  private async sandboxFor(project: Project): Promise<Sandbox> {
+    const sandbox: Sandbox = {
+      mode: this.config.gateSandbox,
+      allowRead: this.config.gateAllowRead,
+      denyRead: [...protectedDirs(this.config), ...(project.holdoutsPath ? [project.holdoutsPath] : [])],
+    };
+    if (sandbox.mode === "off") return sandbox;
+    this.gateProbe ??= this.probeGateSandbox();
+    const probe = await this.gateProbe;
+    if (!probe.isolated) throw new Error(`the gate sandbox failed its isolation probe: ${probe.problems.join("; ")}`);
+    return sandbox;
+  }
+
+  private async probeGateSandbox(): Promise<GateProbeResult> {
+    const probe = await probeGateIsolation({ mode: this.config.gateSandbox, denyRead: [], allowRead: this.config.gateAllowRead }, protectedDirs(this.config), `http://127.0.0.1:${this.config.port}`).catch(
+      (err): GateProbeResult => ({ isolated: false, problems: [`the probe crashed: ${(err as Error).message}`], output: "" }),
+    );
+    await audit(this.db, { actor: "system", kind: probe.isolated ? "gate_sandbox.verified" : "gate_sandbox.failed", data: { problems: probe.problems } });
+    this.gateNoticeSent &&= !probe.isolated;
+    if (!probe.isolated) {
+      // Probe again next time: the fix may be outside Temper (installing a sandbox dependency).
+      this.gateProbe = undefined;
+      if (this.gateNoticeSent) return probe;
+      this.gateNoticeSent = true;
+      await requestApproval(this.db, {
+        kind: "notice",
+        title: "Gate sandbox is not isolating Builder code",
+        body: `Stages that run the Builder's tests or app are blocked until it is.\n\n${probe.problems.map((p) => `- ${p}`).join("\n")}\n\nRun \`temper probe-isolation\` after fixing it.`,
+        options: ["dismiss"],
+      });
+    }
+    return probe;
+  }
+
   // ── lifecycle ────────────────────────────────────────────────────────────
 
   async start(): Promise<void> {
+    if (this.config.gateSandbox === "off") await audit(this.db, { actor: "system", kind: "gate_sandbox.off", data: { reason: "TEMPER_GATE_SANDBOX=off" } });
     await this.recoverOrphans();
     await refreshTemperature(this.db);
     this.timer = setInterval(() => void this.tick(), this.config.heartbeatMs);
@@ -460,7 +506,10 @@ export class Factory extends EventEmitter {
       addDirs.push(worktree);
       disallowed.push(`Edit(${worktree}/**)`, `Write(${worktree}/**)`);
       holdoutsBefore = await headSha(cwd);
-      if (project.appCommand) app = await bootApp(project.appCommand, worktree, project.appHealthPath).catch(() => undefined);
+      if (project.appCommand) {
+        const sandbox = await this.sandboxFor(project);
+        app = await bootApp(project.appCommand, worktree, project.appHealthPath, sandbox).catch(() => undefined);
+      }
     } else {
       if (project.holdoutsPath) denyDirs.push(project.holdoutsPath);
       // A worktree's git metadata lives in the main repository; commits must be able to write it.
@@ -584,6 +633,7 @@ export class Factory extends EventEmitter {
         project: { ...project, defaultBranch: baseRef(project) },
         ticket,
         worktree,
+        sandbox: await this.sandboxFor(project),
         regressionTickets: await this.regressionTickets(project.id),
         signal,
         onEvent,

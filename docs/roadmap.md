@@ -67,6 +67,5 @@ instead of an LLM judge.
 ## Parked
 
 - Personal-machine install (profiles exist; access to the repo from the personal account is undecided).
-- Licence (undecided; ask Legal before publishing or using outside the hosting organisation).
 - Jira plugin (deliberately not built).
 - OpenViking or another context database behind the knowledge store interface (needs embedding/VLM API keys; licence to verify).

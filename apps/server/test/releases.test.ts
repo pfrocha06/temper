@@ -31,7 +31,7 @@ describe("activate", () => {
 describe("plist", () => {
   it("runs the current release with KeepAlive and escapes values", () => {
     const xml = plist({ home: "/h/.temper", node: "/usr/bin/node", path: "/a&b" });
-    expect(xml).toContain("/h/.temper/current/apps/server/src/main.ts");
+    expect(xml).toContain(join("/h/.temper", "current", "apps", "server", "src", "main.ts"));
     expect(xml).toContain("<key>KeepAlive</key><true/>");
     expect(xml).toContain("/a&amp;b");
   });
