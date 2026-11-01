@@ -60,10 +60,15 @@ const norm = (p: string) => p.replace(/[\\/]+$/, "");
  * sandbox) with the workspace writable, protected directories unreadable, and the network
  * limited to loopback.
  *
- * Loopback is open for every run, not only the Verifier's: with the network off, Codex's sandbox
- * refuses even a local listen, so a project's own tests could not start a stub server. The
- * domain rules only hold while Codex's network proxy runs, so every run enables it, and the
- * isolation probe checks that the internet stays unreachable.
+ * Loopback is open for every run: with the network off, Codex's sandbox refuses even a local
+ * listen, so a project's own tests could not start a stub server. Domain rules only hold while
+ * Codex's network proxy runs, so every run enables it, and the isolation probe checks that the
+ * internet stays unreachable.
+ *
+ * Local binding (tests listen, and reach their own servers directly) is on unless the run needs
+ * the host's loopback (`hostLoopback`, the Verifier on Linux): there the sandbox has its own
+ * network namespace, and only the proxy reaches the candidate app on the host. On macOS, local
+ * binding may also let commands reach private-network addresses.
  */
 export function permissionProfile(req: RunRequest): Record<string, unknown> {
   const filesystem: Record<string, string> = {};
@@ -73,7 +78,7 @@ export function permissionProfile(req: RunRequest): Record<string, unknown> {
   return {
     extends: req.readOnly ? ":read-only" : ":workspace",
     filesystem,
-    network: { enabled: true, domains: { localhost: "allow", "127.0.0.1": "allow" } },
+    network: { enabled: true, allow_local_binding: !req.hostLoopback, domains: { localhost: "allow", "127.0.0.1": "allow" } },
   };
 }
 
@@ -151,14 +156,7 @@ export function buildArgs(req: RunRequest, opts: { disabledSkills?: string[]; se
     ...c("approval_policy", "never"),
     ...c("web_search", "disabled"),
     ...sandboxArgs(req, opts.platform),
-    ...c("shell_environment_policy", {
-      inherit: "all",
-      ignore_default_excludes: false,
-      exclude: opts.secretEnv ?? [],
-      // Codex routes Node's HTTP through its proxy, which reaches only the host's loopback (Linux).
-      // A run that does not need the candidate app keeps loopback direct, so its tests' own servers answer.
-      set: req.hostLoopback ? {} : { NO_PROXY: LOOPBACK, no_proxy: LOOPBACK },
-    }),
+    ...c("shell_environment_policy", { inherit: "all", ignore_default_excludes: false, exclude: opts.secretEnv ?? [] }),
     ...c("mcp_servers", opts.mcpServers ?? {}),
     ...(opts.disabledSkills?.length ? c("skills", { config: opts.disabledSkills.map((path) => ({ path, enabled: false })) }) : []),
     ...(instructions ? c("developer_instructions", instructions) : []),
@@ -170,7 +168,6 @@ export function buildArgs(req: RunRequest, opts: { disabledSkills?: string[]; se
   return args;
 }
 
-const LOOPBACK = "localhost,127.0.0.1,::1";
 const RATE_LIMIT = /usage limit|rate limit|too many requests|429/i;
 
 type Item = { id?: string; type?: string; text?: string; command?: string; aggregated_output?: string; exit_code?: number | null; status?: string; changes?: unknown; server?: string; tool?: string; arguments?: unknown; result?: unknown; error?: { message?: string }; message?: string };

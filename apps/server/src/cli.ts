@@ -250,7 +250,7 @@ switch (command) {
       if (!loadProfile(config.home).adapters.includes("codex-cli")) log("not enabled: add \"codex-cli\" to adapters in profile.json");
       break;
     }
-    const codexArgs = sub === "login" || sub === "logout" ? [sub, ...args] : sub === "setup" ? ["sandbox", "setup", "--elevated", "--codex-home", config.codexHome, ...args] : undefined;
+    const codexArgs = sub === "login" || sub === "logout" ? [sub, ...args] : sub === "setup" ? ["sandbox", "setup", "--elevated", "--current-user", "--codex-home", config.codexHome, ...args] : undefined;
     if (!codexArgs) throw new Error("usage: temper codex login | logout | status | setup");
     mkdirSync(config.codexHome, { recursive: true, mode: 0o700 });
     // Interactive: the login opens a browser (or prints a device code); `setup` asks for admin once.

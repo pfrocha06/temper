@@ -83,14 +83,19 @@ describe.runIf(enabled)("codex sandbox enforces the run's permission profile", (
     expect(await inSandbox(tryWrite(join(work, "ro.txt")), req({ readOnly: true }))).toContain("DENIED");
   });
 
-  // Over TCP: Codex points Node's HTTP at its proxy, which only reaches the host's loopback.
-  it("reaches the host's loopback and its own servers, never the internet", async () => {
-    expect(await inSandbox(`fetch(${JSON.stringify(appUrl)}).then(r=>r.text()).then(t=>console.log('LOOP',t)).catch(e=>console.log('LOOPERR',e.cause?.code||e.message))`)).toContain("LOOP HOSTAPP");
-    expect(
-      await inSandbox(`const net=require('net');const s=net.createServer(c=>c.end('SELF')).listen(0,'127.0.0.1',()=>net.connect(s.address().port,'127.0.0.1').on('data',d=>{console.log('SELF',String(d));s.close()}))`),
-    ).toContain("SELF SELF");
-    const net = await inSandbox(`fetch('https://example.com').then(r=>console.log('NET',r.status)).catch(e=>console.log('NETERR',e.cause?.code||e.message))`);
-    expect(net).toContain("NETERR");
-    expect(net).not.toMatch(/NET \d/);
+  const net = `fetch('https://example.com').then(r=>console.log('NET',r.status)).catch(e=>console.log('NETERR',e.cause?.code||e.message))`;
+
+  it("reaches its own servers, never the internet", async () => {
+    const out = await inSandbox(`const s=require('http').createServer((q,r)=>r.end('SELF')).listen(0,'127.0.0.1',()=>fetch('http://127.0.0.1:'+s.address().port).then(r=>r.text()).then(t=>{console.log('SELF',t);s.close()},e=>{console.log('SELFERR',e.cause?.code||e.message);s.close()}));${net}`);
+    expect(out).toContain("SELF SELF");
+    expect(out).toContain("NETERR");
+    expect(out).not.toMatch(/NET d/);
+  });
+
+  it("reaches the candidate app on the host's loopback when the run needs it, never the internet", async () => {
+    const out = await inSandbox(`fetch(${JSON.stringify(appUrl)}).then(r=>r.text()).then(t=>console.log('LOOP',t)).catch(e=>console.log('LOOPERR',e.cause?.code||e.message));${net}`, req({ hostLoopback: true }));
+    expect(out).toContain("LOOP HOSTAPP");
+    expect(out).toContain("NETERR");
+    expect(out).not.toMatch(/NET d/);
   });
 });

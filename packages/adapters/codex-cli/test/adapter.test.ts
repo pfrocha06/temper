@@ -20,8 +20,12 @@ describe("permissionProfile", () => {
     expect(p).toEqual({
       extends: ":workspace",
       filesystem: { "/repo/.git": "write", "/cand": "read", "/holdouts": "deny", "/secrets": "deny" },
-      network: { enabled: true, domains: { localhost: "allow", "127.0.0.1": "allow" } },
+      network: { enabled: true, allow_local_binding: true, domains: { localhost: "allow", "127.0.0.1": "allow" } },
     });
+  });
+
+  it("reaches the host's loopback through the proxy only when the run needs the candidate app", () => {
+    expect(permissionProfile({ ...base, hostLoopback: true }).network).toEqual({ enabled: true, allow_local_binding: false, domains: { localhost: "allow", "127.0.0.1": "allow" } });
   });
 
   it("starts read-only runs from the read-only profile and grants no writes", () => {

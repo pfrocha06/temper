@@ -188,6 +188,8 @@ temper probe-isolation --holdouts <holdouts-checkout>
 
 Codex runs in its own sandbox with a permission profile Temper writes per run: the workspace
 writable, holdouts and Temper's secrets unreadable, loopback only, no internet, no web search.
+On macOS, Codex's local-binding mode (which lets tests start their own servers) may also reach
+private-network addresses; `probe-isolation` checks the internet, not your LAN.
 Temper refuses to dispatch to an adapter the profile doesn't enable, or one signed in to an account
 other than the one it pins, and records the refusal in the audit log.
 
