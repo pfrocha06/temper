@@ -1,5 +1,6 @@
 import { queryOptions, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { api, patch, post, put } from "./api";
+import type { JiraImportBody, JiraImportResult } from "./jira-import";
 import type { ProviderInfo } from "./providers";
 import type {
   Agent,
@@ -200,3 +201,7 @@ export const useSendChatMessage = () =>
 
 export const useSetCaps = () =>
   useInvalidating(({ id, caps }: { id: string; caps: ProviderCaps }) => put<ProviderCaps>(`/providers/${enc(id)}/caps`, caps), [keys.providers, keys.status]);
+
+/** Imports Jira issues as tickets; the server answers 400 when `trackers.jira` is not configured. */
+export const useImportJira = () =>
+  useInvalidating((body: JiraImportBody) => post<{ results: JiraImportResult[] }>("/jira/import", body), [keys.tickets, keys.status]);

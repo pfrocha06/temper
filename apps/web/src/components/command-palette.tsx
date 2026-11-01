@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { BookOpenIcon, BookPlusIcon, FileInputIcon, FolderPlusIcon, MessageSquareIcon, MessageSquarePlusIcon, PauseIcon, PlayIcon, PlusIcon } from "lucide-react";
+import { BookOpenIcon, BookPlusIcon, FileInputIcon, TicketCheckIcon, FolderPlusIcon, MessageSquareIcon, MessageSquarePlusIcon, PauseIcon, PlayIcon, PlusIcon } from "lucide-react";
 import { useEffect } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from "@/components/ui/command";
+import { ImportJiraDialog } from "@/features/board/import-jira-dialog";
 import { useAppActions } from "@/hooks/use-app-actions";
 import { useEnvironment } from "@/hooks/use-environment";
 import { useProject } from "@/hooks/use-project";
@@ -43,6 +44,8 @@ export function CommandPalette() {
   const paused = status.data?.paused ?? false;
 
   return (
+    <>
+    <ImportJiraDialog open={open === "import-jira"} onOpenChange={(o) => setOpen("import-jira", o)} />
     <CommandDialog
       open={isOpen}
       onOpenChange={(o) => setOpen("palette", o)}
@@ -67,6 +70,10 @@ export function CommandPalette() {
               <FileInputIcon />
               Import spec
               <CommandShortcut>I</CommandShortcut>
+            </CommandItem>
+            <CommandItem disabled={!project} value="import from jira issue key jql" onSelect={run(() => show("import-jira"))}>
+              <TicketCheckIcon />
+              Import from Jira
             </CommandItem>
             <CommandItem disabled={!environment} value="add knowledge entry" onSelect={run(() => show("add-knowledge"))}>
               <BookPlusIcon />
@@ -143,5 +150,6 @@ export function CommandPalette() {
         </CommandList>
       </Command>
     </CommandDialog>
+    </>
   );
 }

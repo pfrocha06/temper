@@ -12,7 +12,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRightIcon, FileInputIcon, FolderGit2Icon, PlusIcon } from "lucide-react";
+import { ChevronRightIcon, FileInputIcon, FolderGit2Icon, PlusIcon, TicketCheckIcon } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { toast } from "sonner";
@@ -124,6 +124,10 @@ export function BoardPage() {
               <FileInputIcon data-icon="inline-start" />
               Import spec
               <Kbd className="ml-1 max-md:hidden">I</Kbd>
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => show("import-jira")} disabled={!project}>
+              <TicketCheckIcon data-icon="inline-start" />
+              Import from Jira
             </Button>
             <Button size="sm" onClick={() => show("new-ticket")} disabled={!project}>
               <PlusIcon data-icon="inline-start" />

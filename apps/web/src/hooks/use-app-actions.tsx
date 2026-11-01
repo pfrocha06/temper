@@ -1,6 +1,6 @@
 import { createContext, use, useState, type ReactNode } from "react";
 
-type Dialog = "new-ticket" | "import-spec" | "palette" | "add-knowledge" | "new-environment";
+type Dialog = "new-ticket" | "import-spec" | "import-jira" | "palette" | "add-knowledge" | "new-environment";
 
 type AppActions = {
   open: Dialog | null;
