@@ -72,8 +72,22 @@ export const ghIssues: IssueSource = {
   },
 };
 
-/** `owner/repo` from a GitHub remote (https or ssh), or undefined for any other host. */
+const HOST = "github.com";
+const NAME = /^[\w.-]+$/;
+
+/**
+ * `owner/repo` from a GitHub remote (https or ssh), or undefined for any other host. Parsed by
+ * hand: remotes come from project settings, and a backtracking regex over them is a ReDoS risk.
+ */
 export function repoFromRemote(remote: string | null | undefined): string | undefined {
-  const m = /github\.com[/:]([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/.exec(remote ?? "");
-  return m ? `${m[1]}/${m[2]}` : undefined;
+  let s = (remote ?? "").trim();
+  while (s.endsWith("/")) s = s.slice(0, -1);
+  if (s.endsWith(".git")) s = s.slice(0, -".git".length);
+  const at = s.indexOf(HOST);
+  const sep = at < 0 ? undefined : s[at + HOST.length];
+  // The host itself, not a longer name ending in it: start, scheme, `git@`, or a subdomain dot.
+  if (at > 0 && !["/", "@", "."].includes(s[at - 1]!)) return undefined;
+  if (sep !== "/" && sep !== ":") return undefined;
+  const parts = s.slice(at + HOST.length + 1).split("/");
+  return parts.length === 2 && NAME.test(parts[0]!) && NAME.test(parts[1]!) ? `${parts[0]}/${parts[1]}` : undefined;
 }

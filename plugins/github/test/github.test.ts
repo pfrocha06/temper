@@ -38,5 +38,13 @@ describe("repoFromRemote", () => {
     expect(repoFromRemote("git@github.com:acme/shop.git")).toBe("acme/shop");
     expect(repoFromRemote("https://gitlab.com/acme/shop.git")).toBeUndefined();
     expect(repoFromRemote(null)).toBeUndefined();
+    expect(repoFromRemote("https://github.com/acme/shop/")).toBe("acme/shop");
+    expect(repoFromRemote("https://github.com/acme/shop/extra")).toBeUndefined();
+    expect(repoFromRemote("https://notgithub.company/acme/shop")).toBeUndefined();
+    expect(repoFromRemote("https://evilgithub.com/acme/shop")).toBeUndefined();
+    // Linear on hostile input: no backtracking.
+    const start = Date.now();
+    expect(repoFromRemote("github.com/" + "a".repeat(50_000) + "/".repeat(50_000) + "!")).toBeUndefined();
+    expect(Date.now() - start).toBeLessThan(500);
   });
 });
