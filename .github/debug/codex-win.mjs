@@ -1,10 +1,11 @@
 // TEMPORARY: which Codex network settings hold on Windows. Removed once settled.
-import { spawnSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 const home = process.env.TEMPER_TEST_CODEX_HOME;
+const codexJs = join(execSync("npm root -g", { encoding: "utf8" }).trim(), "@openai", "codex", "bin", "codex.js");
 const root = mkdtempSync(join(tmpdir(), "cxdbg-"));
 const deny = join(root, "deny"); mkdirSync(deny); writeFileSync(join(deny, "c.txt"), "CANARY");
 const work = join(root, "work"); mkdirSync(work);
@@ -31,7 +32,7 @@ const variants = {
 for (const [name, v] of Object.entries(variants)) {
   const args = ["sandbox", "-c", 'default_permissions="t"', "-c", `permissions={t = {extends = ":workspace", filesystem = ${toml(fsRules)}, network = ${toml(v.net)}}}`, "-c", 'windows.sandbox="elevated"', ...v.flags, "--permissions-profile", "t", "-C", work, "--", process.execPath, "-e", code];
   const t = Date.now();
-  const r = spawnSync("codex.cmd", args, { cwd: work, env: { ...process.env, CODEX_HOME: home }, encoding: "utf8", shell: true, timeout: 60000 });
+  const r = spawnSync(process.execPath, [codexJs, ...args], { cwd: work, env: { ...process.env, CODEX_HOME: home }, encoding: "utf8", timeout: 60000 });
   console.log(`\n== ${name} (${Date.now() - t}ms, exit ${r.status})\n${(r.stdout + r.stderr).trim().slice(0, 1200)}`);
 }
 app.close();
