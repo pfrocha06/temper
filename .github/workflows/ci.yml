@@ -84,3 +84,21 @@ jobs:
           Get-Content install.ps1 -Raw | Invoke-Expression
           Get-Content install.ps1 -Raw | Invoke-Expression
           temper help
+
+  # TEMPORARY: settle Codex network settings on Windows.
+  codex-windows-debug:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: |
+          npm install -g @openai/codex@0.166.0
+          home="$(cygpath -w "$HOME/.codex-test")"; mkdir -p "$HOME/.codex-test"
+          echo "TEMPER_TEST_CODEX_HOME=$home" >> "$GITHUB_ENV"
+      - run: codex sandbox setup --elevated --current-user --codex-home "$TEMPER_TEST_CODEX_HOME"
+      - run: node .github/debug/codex-win.mjs
