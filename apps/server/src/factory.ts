@@ -228,6 +228,7 @@ export class Factory extends EventEmitter {
   private async sandboxFor(project: Project): Promise<Sandbox> {
     const sandbox: Sandbox = {
       mode: this.config.gateSandbox,
+      allowRead: this.config.gateAllowRead,
       denyRead: [...protectedDirs(this.config), ...(project.holdoutsPath ? [project.holdoutsPath] : [])],
     };
     if (sandbox.mode === "off") return sandbox;
@@ -238,7 +239,7 @@ export class Factory extends EventEmitter {
   }
 
   private async probeGateSandbox(): Promise<GateProbeResult> {
-    const probe = await probeGateIsolation({ mode: this.config.gateSandbox, denyRead: [] }, protectedDirs(this.config), `http://127.0.0.1:${this.config.port}`).catch(
+    const probe = await probeGateIsolation({ mode: this.config.gateSandbox, denyRead: [], allowRead: this.config.gateAllowRead }, protectedDirs(this.config), `http://127.0.0.1:${this.config.port}`).catch(
       (err): GateProbeResult => ({ isolated: false, problems: [`the probe crashed: ${(err as Error).message}`], output: "" }),
     );
     await audit(this.db, { actor: "system", kind: probe.isolated ? "gate_sandbox.verified" : "gate_sandbox.failed", data: { problems: probe.problems } });

@@ -8,6 +8,8 @@ import type { AgentAdapter, ModelUsage, RunEvent, RunRequest, RunResult } from "
 export type ClaudeCliOptions = {
   /** Path to the `claude` binary. */
   bin?: string;
+  /** Arguments placed before the run's own, for a `bin` that is an interpreter (tests: `node fake-claude.mjs`). */
+  binArgs?: string[];
   /** Directories no run may ever read (Temper's own secrets and database), on top of each request's. */
   alwaysDenyDirs?: string[];
 };
@@ -167,7 +169,7 @@ export function createClaudeCliAdapter(options: ClaudeCliOptions = {}): AgentAda
         if (mcpConfig) rmSync(dirname(mcpConfig), { recursive: true, force: true });
       };
       return new Promise<RunResult>((resolve, reject) => {
-        const child = spawn(bin, buildArgs(req, pluginDir, mcpConfig), {
+        const child = spawn(bin, [...(options.binArgs ?? []), ...buildArgs(req, pluginDir, mcpConfig)], {
           cwd: req.cwd,
           env: { ...process.env, ...req.env },
           stdio: ["ignore", "pipe", "pipe"],

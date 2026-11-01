@@ -89,7 +89,8 @@ const help = `temper <command>
 switch (command) {
   case "open": {
     const url = `http://127.0.0.1:${config.port}/auth?token=${encodeURIComponent(boardToken())}`;
-    await run("open", [url], { cwd: config.home });
+    const [opener, ...openArgs] = process.platform === "darwin" ? ["open"] : process.platform === "win32" ? ["cmd", "/c", "start", '""'] : ["xdg-open"];
+    await run(opener!, [...openArgs, url], { cwd: config.home });
     log(`opened the console; to sign in another browser use:\n${url}`);
     break;
   }
@@ -215,7 +216,7 @@ switch (command) {
       process.exitCode = 1;
     }
     // The server also runs Builder code itself (tests, the candidate app): probe that path too.
-    const gate = await probeGateIsolation({ mode: config.gateSandbox, denyRead: [] }, [resolve(values.holdouts), ...protectedDirs(config)], `http://127.0.0.1:${config.port}`);
+    const gate = await probeGateIsolation({ mode: config.gateSandbox, denyRead: [], allowRead: config.gateAllowRead }, [resolve(values.holdouts), ...protectedDirs(config)], `http://127.0.0.1:${config.port}`);
     if (gate.isolated) log("✓ gate commands isolated: no canary readable, no writes, no server environment, no board API, no internet");
     else {
       log(`✗ GATE LEAK${config.gateSandbox === "off" ? " (TEMPER_GATE_SANDBOX=off)" : ""}:\n${gate.problems.map((p) => `  - ${p}`).join("\n")}\n${gate.output.slice(-3000)}`);

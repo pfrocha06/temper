@@ -32,7 +32,7 @@ export async function runSandboxed(
   sandbox: Sandbox,
   opts: { cwd: string; env?: Record<string, string>; timeoutMs?: number; signal?: AbortSignal; onOutput?: (chunk: string) => void },
 ): Promise<ExecResult> {
-  const cmd = sandboxed(sandbox, command, { cwd: opts.cwd, env: opts.env });
+  const cmd = await sandboxed(sandbox, command, { cwd: opts.cwd, env: opts.env });
   try {
     return await runProcess(spawn(cmd.file, cmd.args, { cwd: opts.cwd, env: cmd.env, shell: cmd.shell, signal: opts.signal }), opts.timeoutMs, opts.onOutput);
   } finally {

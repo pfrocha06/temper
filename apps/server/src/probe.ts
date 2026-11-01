@@ -14,13 +14,13 @@ const GATE_PROBE_SCRIPT = `
 import { copyFileSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
-const { files, dirs, marker, api } = JSON.parse(process.env.TEMPER_PROBE_ARGS);
+const { files, dirs, marker, api } = JSON.parse(readFileSync(new URL("./probe-args.json", import.meta.url), "utf8"));
 const attempt = (label, fn) => {
   try { console.log(label, "OK", String(fn()).slice(0, 200)); } catch (e) { console.log(label, "DENIED", e.code ?? String(e.message).split("\\n")[0]); }
 };
 files.forEach((f, i) => {
   attempt("read" + i, () => readFileSync(f, "utf8"));
-  attempt("cat" + i, () => execFileSync("cat", [f]).toString());
+  attempt("child" + i, () => execFileSync(process.execPath, ["-e", "process.stdout.write(require('fs').readFileSync(process.argv[1], 'utf8'))", f]).toString());
   attempt("copy" + i, () => { copyFileSync(f, "copy" + i); return readFileSync("copy" + i, "utf8"); });
   attempt("link" + i, () => { symlinkSync(f, "link" + i); return readFileSync("link" + i, "utf8"); });
 });
@@ -51,8 +51,8 @@ export async function probeGateIsolation(sandbox: Sandbox, protectedDirs: string
   process.env.TEMPER_PROBE_SECRET = secret;
   try {
     writeFileSync(join(cwd, "probe.mjs"), GATE_PROBE_SCRIPT);
-    const args = JSON.stringify({ files: canaries.map((c) => c.file), dirs: protectedDirs, marker, api: apiUrl });
-    const r = await runSandboxed("node probe.mjs", { ...sandbox, denyRead: [...sandbox.denyRead, ...protectedDirs] }, { cwd, env: { TEMPER_PROBE_ARGS: args }, timeoutMs: 60_000 });
+    writeFileSync(join(cwd, "probe-args.json"), JSON.stringify({ files: canaries.map((c) => c.file), dirs: protectedDirs, marker, api: apiUrl }));
+    const r = await runSandboxed(`"${process.execPath}" probe.mjs`, { ...sandbox, denyRead: [...sandbox.denyRead, ...protectedDirs] }, { cwd, timeoutMs: 120_000 });
     const output = r.stdout + r.stderr;
     const problems: string[] = [];
     if (!/^env /m.test(output)) problems.push(`the probe did not run (exit ${r.code}): ${output.trim().split("\n").slice(-3).join(" | ")}`);

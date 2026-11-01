@@ -1,5 +1,5 @@
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { SandboxMode } from "./sandbox.ts";
 
@@ -19,6 +19,8 @@ export type Config = {
   secretsDir: string;
   /** Sandbox for Builder code the server runs itself (tests, the candidate app). `off` only for development. */
   gateSandbox: SandboxMode;
+  /** Extra paths gate commands may read (Windows: per-user tool installs the sandbox account cannot see). */
+  gateAllowRead: string[];
 };
 
 /** Temper's own secrets and data: no agent run and no sandboxed gate command may read them. */
@@ -40,5 +42,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     claudeBin: env.TEMPER_CLAUDE_BIN ?? "claude",
     secretsDir: join(home, "secrets"),
     gateSandbox: env.TEMPER_GATE_SANDBOX === "off" ? "off" : "srt",
+    gateAllowRead: (env.TEMPER_GATE_ALLOW_READ ?? "").split(delimiter).filter(Boolean),
   };
 }

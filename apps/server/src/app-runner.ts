@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { createServer } from "node:net";
 import { sandboxed, type Sandbox } from "./sandbox.ts";
@@ -23,17 +23,21 @@ export type RunningApp = { url: string; token: string; stop: () => void; logs: (
  */
 export async function bootApp(command: string, cwd: string, healthPath: string, sandbox: Sandbox, timeoutMs = 120_000): Promise<RunningApp> {
   const port = await freePort();
-  const url = `http://127.0.0.1:${port}`;
   const token = randomBytes(24).toString("base64url");
   let logs = "";
-  const cmd = sandboxed(sandbox, command, { cwd, env: { PORT: String(port), TEMPER_INSTANCE: `app-${port}`, TEMPER_BOARD_TOKEN: token } });
-  const child: ChildProcess = spawn(cmd.file, cmd.args, { cwd, shell: cmd.shell, detached: true, env: cmd.env });
+  const cmd = await sandboxed(sandbox, command, { cwd, env: { PORT: String(port), TEMPER_INSTANCE: `app-${port}`, TEMPER_BOARD_TOKEN: token }, expose: port });
+  // Where the host reaches the app: its port directly, or the relay into a Linux sandbox.
+  const url = cmd.url!;
+  const child: ChildProcess = spawn(cmd.file, cmd.args, { cwd, shell: cmd.shell, detached: process.platform !== "win32", env: cmd.env });
   child.stdout?.on("data", (b: Buffer) => (logs = (logs + b).slice(-20_000)));
   child.stderr?.on("data", (b: Buffer) => (logs = (logs + b).slice(-20_000)));
   child.on("close", () => cmd.dispose());
   const stop = () => {
+    if (!child.pid) return;
     try {
-      if (child.pid) process.kill(-child.pid, "SIGTERM");
+      // Windows has no process groups: end the whole tree.
+      if (process.platform === "win32") spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+      else process.kill(-child.pid, "SIGTERM");
     } catch {
       /* already gone */
     }

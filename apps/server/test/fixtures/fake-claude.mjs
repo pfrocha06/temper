@@ -19,7 +19,11 @@ if (prompt.includes("You are the builder")) {
     text = "I think I am done.\nVERDICT: PASS"; // forgot to commit: the gate must catch it
   }
 } else if (prompt.includes("You are the verifier")) {
-  writeFileSync("check.sh", "test -f \"$TEMPER_CANDIDATE_PATH/hello.txt\" && echo 'AC-1: PASS' || echo 'AC-1: FAIL hello missing'\n");
+  writeFileSync(
+    "check.mjs",
+    'import { existsSync } from "node:fs";\nimport { join } from "node:path";\n' +
+      'console.log(existsSync(join(process.env.TEMPER_CANDIDATE_PATH, "hello.txt")) ? "AC-1: PASS" : "AC-1: FAIL hello missing");\n',
+  );
   text = "AC-1: PASS\nVERDICT: PASS";
 } else if (prompt.includes("You are the reviewer")) {
   text = "No blockers.\nVERDICT: PASS";
