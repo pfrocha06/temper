@@ -20,7 +20,9 @@ pnpm dev        # dev instance on :4610 (server) and :5173 (web)
 ```
 
 You need Node.js ≥ 22, pnpm, git, and for end-to-end runs the `gh` and `claude` CLIs. The test
-suite assumes macOS or Linux; on Windows, use WSL.
+suite runs on macOS, Linux and Windows. The tests that use the real gate sandbox run on macOS by
+default; on Linux and Windows, install the sandbox (see [Platform support](README.md#platform-support))
+and set `TEMPER_TEST_SRT=1`.
 
 ## How we work
 
