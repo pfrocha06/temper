@@ -162,16 +162,20 @@ Holdouts live in their own git repository, outside the project, so the Builder n
 CI runs the full suite on all three, with the real sandbox installed.
 
 ¹ Run `pnpm --filter @temper/server exec srt windows-install` once (one UAC prompt). It creates a
-dedicated `srt-sandbox` account and firewall rules for it; `windows-uninstall` removes them. The
-sandboxed account can't read per-user tool installs, so either install tools machine-wide or list
-their folders in `TEMPER_GATE_ALLOW_READ`. Ubuntu 24.04 and later also need
-`sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` for bubblewrap.
+dedicated `srt-sandbox` account and firewall rules for it; `windows-uninstall` removes them. That
+account can't see inside your user profile, so on Windows worktrees and gate scratch files live
+under `%ProgramData%\temper`, while holdouts and secrets stay in your profile, out of its reach.
+Install tools machine-wide, or list per-user tool folders in `TEMPER_GATE_ALLOW_READ`.
+
+Ubuntu 24.04 and later also need `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`
+for bubblewrap.
 
 ## Configuration
 
 | Variable | Default | What it does |
 |---|---|---|
-| `TEMPER_HOME` | `~/.temper` | All state: releases, instances, worktrees, secrets |
+| `TEMPER_HOME` | `~/.temper` | All state: releases, instances, secrets |
+| `TEMPER_WORKTREES` | `$TEMPER_HOME/worktrees` (Windows: `%ProgramData%\temper\worktrees\<instance>`) | Where ticket worktrees are created |
 | `TEMPER_PORT` | `4600` (`4601` for a release candidate) | Port the server listens on (always `127.0.0.1`) |
 | `TEMPER_INSTANCE` | `main` | Instance name; each has its own database |
 | `TEMPER_HEARTBEAT_MS` | `15000` | How often the scheduler reconciles and dispatches |
