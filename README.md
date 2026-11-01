@@ -15,7 +15,7 @@ You set direction, approve merges, and hand over autonomy only as it is earned.
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](#platform-support)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-[Quick start](#quick-start) · [How it works](#how-it-works) · [Docs](#documentation) · [Roadmap](docs/roadmap.md) · [Contributing](CONTRIBUTING.md)
+[Quick start](#quick-start) · [How it works](#how-it-works) · [Docs](#documentation) · [Roadmap](https://github.com/pfrocha06/temper/issues/24) · [Contributing](CONTRIBUTING.md)
 
 </div>
 
@@ -207,8 +207,8 @@ embedded in-process) with [Drizzle](https://orm.drizzle.team), React, Vite, Tail
 Next up: a harness fingerprint on every run, merge readiness (wait for CI, previews, screenshots),
 notifications and a daily briefing, then **planted-defect trials** that give each verifier a
 measured catch rate, and **autonomy levels** that are earned per area from those rates and lost
-when the temperature rises. See [docs/roadmap.md](docs/roadmap.md). Every item links a spec
-written to be picked up cold.
+when the temperature rises. Progress lives in the pinned [Roadmap issue](https://github.com/pfrocha06/temper/issues/24),
+one issue per item, each linking a spec written to be picked up cold ([docs/roadmap.md](docs/roadmap.md)).
 
 ## Documentation
 

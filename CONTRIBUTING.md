@@ -1,7 +1,7 @@
 # Contributing to Temper
 
 Thanks for helping. Temper is early, so the most useful contributions are bug reports with a
-reproduction, fixes, and work on the items in the [roadmap](docs/roadmap.md).
+reproduction, fixes, and work on the items in the [roadmap](https://github.com/pfrocha06/temper/issues/24).
 
 ## Before you start
 
@@ -36,7 +36,7 @@ and set `TEMPER_TEST_SRT=1`.
   `~/.temper/agnostic-denylist.txt`, which is never committed.
 - **Record decisions.** A change to the architecture or to a trade-off an ADR made comes with a
   new or updated ADR in `docs/adr/`.
-- **Update the roadmap** status when you finish a roadmap item.
+- **Close the roadmap issue** from the PR with `Closes #<issue>`; it is a sub-issue of the pinned [Roadmap issue](https://github.com/pfrocha06/temper/issues/24), whose progress bar updates.
 
 ## Changes that need extra care
 
