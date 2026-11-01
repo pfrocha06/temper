@@ -71,7 +71,7 @@ export async function saveAgent(db: Db, draft: AgentDraft, actor: Actor = "board
     .insert(agents)
     .values({ ...draft, version: (current?.version ?? 0) + 1 })
     .returning();
-  await audit(db, { actor, kind: "agent.saved", subject: `${row!.id}@${row!.version}`, data: { role: row!.role, model: row!.model } });
+  await audit(db, { actor, kind: "agent.saved", subject: `${row!.id}@${row!.version}`, data: { role: row!.role, adapter: row!.adapter, model: row!.model } });
   if (current && draft.role === "verifier") {
     await requestApproval(db, {
       kind: "agent_change",

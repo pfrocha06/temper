@@ -52,6 +52,8 @@ opposite assumption, and enforces it in the server rather than in prompts.
   skills, instructions and MCP servers its role is assigned. Your own agent settings never leak in.
 - **Hard gates.** Builder tests, holdouts against the running app (API and browser checks), a diff
   guard that rejects weakened or skipped tests and out-of-scope edits, and a secret scan.
+- **Two agent vendors.** Claude Code and Codex behind one adapter interface. Run the Verifier
+  on a different vendor from the Builder, so another model family checks the work.
 - **Isolation you can check.** `temper probe-isolation` plants canaries and proves agents, and the
   commands that run their code, can't read them.
 - **A console for the board.** Board, live runs, inbox, thermostat, usage and caps, agents, skills,
@@ -166,6 +168,29 @@ temper import-spec --project <id> --file spec.md --start
 `temper rollback` returns to the previous release and `temper pause` stops new work.
 `temper help` lists every command.
 
+### Codex as a second vendor
+
+With every role on one vendor, the Builder's work and its proof share blind spots. Put the
+Verifier (or the Reviewer) on [Codex](https://developers.openai.com/codex/cli) to break that:
+
+```sh
+# 1. Enable it in ~/.temper/profile.json; optionally pin the account each CLI must be signed in as
+#    "adapters": ["claude-cli", "codex-cli"], "accounts": { "codex-cli": "you@example.com" }
+
+# 2. Sign Temper's own Codex in. It lives in ~/.temper/secrets/codex, apart from ~/.codex, so your
+#    Codex config, AGENTS.md, hooks, plugins and memories never reach agent runs
+temper codex login
+temper codex setup        # Windows only: Codex's elevated sandbox, one admin prompt
+
+# 3. Prove it is isolated before giving it work, then pick it on the Agents screen
+temper probe-isolation --holdouts <holdouts-checkout>
+```
+
+Codex runs in its own sandbox with a permission profile Temper writes per run: the workspace
+writable, holdouts and Temper's secrets unreadable, loopback only, no internet, no web search.
+Temper refuses to dispatch to an adapter the profile doesn't enable, or one signed in to an account
+other than the one it pins, and records the refusal in the audit log.
+
 ### The holdouts repository
 
 Holdouts live in their own git repository, outside the project, so the Builder never sees them
@@ -185,6 +210,7 @@ Holdouts live in their own git repository, outside the project, so the Builder n
 | Gate sandbox (Builder tests, candidate app) | ✅ built in | ✅ `bubblewrap`, `socat`, `ripgrep` ¹ | ✅ alpha, one-time setup ² |
 | Background service (`temper start`) | ✅ launchd | run `temper serve` under your own service manager | run `temper serve` under your own service manager |
 | Agent runs sandboxed (by the `claude` CLI) | ✅ | ✅ | check with `probe-isolation` |
+| Agent runs sandboxed (by the `codex` CLI) | ✅ | ✅ | ✅ needs `temper codex setup` |
 
 CI runs the full suite on all three, with the real sandbox installed.
 
@@ -208,6 +234,8 @@ Install tools machine-wide, or list per-user tool folders in `TEMPER_GATE_ALLOW_
 | `TEMPER_INSTANCE` | `main` | Instance name; each has its own database |
 | `TEMPER_HEARTBEAT_MS` | `15000` | How often the scheduler reconciles and dispatches |
 | `TEMPER_CLAUDE_BIN` | `claude` | Path to the Claude Code CLI |
+| `TEMPER_CODEX_BIN` | `codex` | Path to the Codex CLI |
+| `TEMPER_CODEX_HOME` | `$TEMPER_HOME/secrets/codex` | Temper's own Codex login, kept apart from `~/.codex` |
 | `TEMPER_GATE_SANDBOX` | `srt` | `off` runs gate commands unsandboxed; for development only |
 | `TEMPER_GATE_ALLOW_READ` | | Extra folders gate commands may read (Windows), separated like `PATH` |
 | `TEMPER_API_URL` | `http://127.0.0.1:4600` | Where the dev console proxies API calls |
@@ -218,7 +246,7 @@ Install tools machine-wide, or list per-user tool folders in `TEMPER_GATE_ALLOW_
 apps/server            API, scheduler, orchestrator, gates, sandbox, git service, CLI
 apps/web               the console
 packages/core          domain: tickets, dispatches, audit log, temperature, workflows, database
-packages/adapters/*    agent CLI adapters (claude-cli first)
+packages/adapters/*    agent CLI adapters: claude-cli, codex-cli
 packages/mcp-temper    the MCP server agents use to reach Temper's knowledge and tools
 plugins/*              git host and tracker plugins (github, jira)
 workflows/             one workflow per ticket type

@@ -21,7 +21,10 @@ export type TrackersConfig = { jira?: JiraTrackerConfig };
 export type Profile = {
   name: string;
   github?: { user: string };
+  /** Agent adapters Temper may dispatch to (`claude-cli`, `codex-cli`). */
   adapters: string[];
+  /** Per adapter, the only account its CLI may be signed in as (email). Unset: any login. */
+  accounts?: Record<string, string>;
   plugins: string[];
   /** MCP servers agents may be given (assigned per role on the Agents screen). Values never leave the server. */
   mcpServers: Record<string, McpServerConfig>;

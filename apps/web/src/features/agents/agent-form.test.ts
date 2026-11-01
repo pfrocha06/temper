@@ -24,6 +24,7 @@ describe("agent form", () => {
     expect(errors).toEqual({});
     expect(edit).toEqual({
       name: "Builder",
+      adapter: "claude-cli",
       model: "sonnet",
       skills: ["tdd"],
       mcpServers: ["temper"],

@@ -9,6 +9,8 @@ export type ProviderInfo = {
   vendor: Vendor;
   /** Temper has an adapter for it. */
   adapter: boolean;
+  /** The profile lets Temper dispatch to it. */
+  enabled?: boolean;
   installed: boolean;
   version?: string;
   account?: { loggedIn: boolean; method?: string; email?: string; org?: string; subscription?: string };
@@ -43,20 +45,31 @@ export function vendorOfAdapter(adapter: string | null | undefined): Vendor | un
 
 /** What a provider Temper has no adapter for yet would be used for. */
 export const PLANNED_USE: Record<string, string> = {
-  "codex-cli": "A second vendor for the Verifier and Reviewer, so the Builder's work is checked by a different model family.",
   "gemini-cli": "A second vendor for the Verifier and Reviewer, and long-context reads of large codebases.",
   opencode: "Running open-weight or self-hosted models for any role.",
 };
 
-export type ProviderState = "active" | "no_adapter" | "not_installed";
+export type ProviderState = "active" | "not_enabled" | "no_adapter" | "not_installed";
 
-export function providerState(p: Pick<ProviderInfo, "adapter" | "installed">): ProviderState {
+export function providerState(p: Pick<ProviderInfo, "adapter" | "installed" | "enabled">): ProviderState {
   if (!p.installed) return "not_installed";
-  return p.adapter ? "active" : "no_adapter";
+  if (!p.adapter) return "no_adapter";
+  return p.enabled === false ? "not_enabled" : "active";
+}
+
+/**
+ * The vendor the Builder and the Verifier share, if they do: then the work and its proof come
+ * from one model family, and their blind spots are correlated (ADR 6).
+ */
+export function sharedVendor(agents: Array<{ role: string; adapter: string }>): Vendor | undefined {
+  const vendorOf = (role: string) => vendorOfAdapter(agents.find((a) => a.role === role)?.adapter);
+  const builder = vendorOf("builder");
+  return builder && builder === vendorOf("verifier") ? builder : undefined;
 }
 
 export const STATE_LABEL: Record<ProviderState, string> = {
   active: "Active",
+  not_enabled: "Installed, not enabled in the profile",
   no_adapter: "Installed, no adapter yet",
   not_installed: "Not installed",
 };

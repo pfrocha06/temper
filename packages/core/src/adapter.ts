@@ -13,6 +13,10 @@ export type RunRequest = {
   addDirs?: string[];
   /** Directories the agent must never read (holdouts, for the Builder). */
   denyDirs?: string[];
+  /** Directories the agent may read but never change (the candidate, for the Verifier). */
+  readOnlyDirs?: string[];
+  /** The run may not change any file (review stages). */
+  readOnly?: boolean;
   /**
    * Let sandboxed commands reach the host's 127.0.0.1 (the candidate app). Needed where the
    * sandbox has its own network namespace (Linux): traffic must go through the sandbox's proxy.

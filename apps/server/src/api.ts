@@ -83,6 +83,8 @@ const NewTicket = z.object({
 
 const AgentEdit = z.object({
   name: z.string().min(1),
+  /** Which agent CLI runs this role; must be one the server has (the profile enables). */
+  adapter: z.string().optional(),
   model: z.string().nullable(),
   skills: z.array(z.string()),
   mcpServers: z.array(z.string()).optional(),
@@ -197,7 +199,11 @@ export function createApi(db: Db, factory: Factory, config: Config, opts: { upti
     const current = (await listAgents(db)).find((a) => a.id === c.req.param("id"));
     if (!current) return c.json({ error: "not found" }, 404);
     const edit = AgentEdit.parse(await c.req.json());
-    return c.json(await saveAgent(db, { id: current.id, role: current.role, adapter: current.adapter, ...edit, mcpServers: edit.mcpServers ?? current.mcpServers }));
+    const adapter = edit.adapter ?? current.adapter;
+    if (adapter !== current.adapter && !factory.adapterIds().includes(adapter)) {
+      return c.json({ error: `adapter '${adapter}' is not enabled; add it to the profile's adapters (available: ${factory.adapterIds().join(", ")})` }, 400);
+    }
+    return c.json(await saveAgent(db, { id: current.id, role: current.role, ...edit, adapter, mcpServers: edit.mcpServers ?? current.mcpServers }));
   });
 
   // ── environments, knowledge, Chief conversations, tools ─────────────────
@@ -261,7 +267,7 @@ export function createApi(db: Db, factory: Factory, config: Config, opts: { upti
   });
 
   app.get("/api/providers", async (c) =>
-    c.json(await listProviders(db, await listAgents(db), { claudeBin: config.claudeBin, pausedAdapters: (factory.status().pausedAdapters ?? {}) as Record<string, number> })),
+    c.json(await listProviders(db, await listAgents(db), { claudeBin: config.claudeBin, codexBin: config.codexBin, codexHome: config.codexHome, enabled: factory.adapterIds(), pausedAdapters: (factory.status().pausedAdapters ?? {}) as Record<string, number> })),
   );
   app.get("/api/usage", async (c) => {
     const to = c.req.query("to") ? new Date(c.req.query("to")!) : new Date();
@@ -278,7 +284,7 @@ export function createApi(db: Db, factory: Factory, config: Config, opts: { upti
     return c.json(await setCaps(db, c.req.param("id"), caps));
   });
 
-  app.get("/api/tools", async (c) => c.json(await inventory(opts.profile ?? loadProfile(config.home), await listAgents(db), config.claudeBin)));
+  app.get("/api/tools", async (c) => c.json(await inventory(opts.profile ?? loadProfile(config.home), await listAgents(db), config)));
 
   app.get("/api/temperature", async (c) => c.json({ history: await snapshotHistory(db, 200), policies: REGIME_POLICIES, enforced: false }));
   app.get("/api/skills", (c) => c.json(readRegistry(config.appRoot)));

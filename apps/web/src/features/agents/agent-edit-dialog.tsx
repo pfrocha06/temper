@@ -8,10 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { Toggle } from "@/components/ui/toggle";
-import { skillsQuery, toolsQuery, useSaveAgent } from "@/lib/queries";
+import { providersQuery, skillsQuery, toolsQuery, useSaveAgent } from "@/lib/queries";
 import type { Agent } from "@/lib/types";
 import { toAgentEdit, toFormValues, type AgentFormValues, type FormErrors } from "./agent-form";
 
@@ -39,6 +40,7 @@ function AgentForm({ agent, onDone }: { agent: Agent; onDone: () => void }) {
   const save = useSaveAgent();
   const skills = useQuery(skillsQuery);
   const tools = useQuery(toolsQuery);
+  const providers = useQuery(providersQuery);
   const [values, setValues] = useState<AgentFormValues>(() => toFormValues(agent));
   const [errors, setErrors] = useState<FormErrors>({});
   const [serverError, setServerError] = useState<string | null>(null);
@@ -53,6 +55,12 @@ function AgentForm({ agent, onDone }: { agent: Agent; onDone: () => void }) {
   const mcpKnown = tools.data?.mcpServers.map((m) => m.name) ?? [];
   const mcpUnknown = values.mcpServers.filter((s) => !mcpKnown.includes(s));
   const mcpDescription = new Map(tools.data?.mcpServers.map((m) => [m.name, m.description]) ?? []);
+
+  // Adapters the server can dispatch to, plus the current one so it always shows.
+  const adapters = [...new Set([agent.adapter, ...(providers.data ?? []).filter((p) => p.adapter && p.enabled !== false).map((p) => p.id)])];
+  const adapterName = new Map(providers.data?.map((p) => [p.id, p.name]) ?? []);
+  // Model names belong to one vendor: switching adapter falls back to its default model.
+  const setAdapter = (adapter: string) => setValues((v) => ({ ...v, adapter, model: adapter === agent.adapter ? (agent.model ?? "") : "" }));
 
   const known = skills.data?.map((s) => s.name) ?? [];
   const unknownAssigned = values.skills.filter((s) => !known.includes(s));
@@ -97,6 +105,23 @@ function AgentForm({ agent, onDone }: { agent: Agent; onDone: () => void }) {
             <FieldLabel htmlFor="ag-name">Name</FieldLabel>
             <Input id="ag-name" value={values.name} onChange={(e) => set("name", e.target.value)} aria-invalid={errors.name ? true : undefined} />
             {errors.name ? <FieldError>{errors.name}</FieldError> : null}
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="ag-adapter">Adapter</FieldLabel>
+            <Select value={values.adapter} onValueChange={setAdapter}>
+              <SelectTrigger id="ag-adapter" className="w-full font-mono">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {adapters.map((id) => (
+                  <SelectItem key={id} value={id} className="font-mono">
+                    {id}
+                    {adapterName.get(id) ? <span className="font-sans text-muted-foreground">{adapterName.get(id)}</span> : null}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FieldDescription>Only adapters the profile enables are listed.</FieldDescription>
           </Field>
           <Field>
             <FieldLabel htmlFor="ag-model">Model</FieldLabel>

@@ -1,11 +1,11 @@
 import { dirname, join } from "node:path";
 import { serve } from "@hono/node-server";
-import { createClaudeCliAdapter } from "@temper/adapter-claude-cli";
-import { audit, ensureDefaultEnvironment, loadWorkflows, openDb, seedAgents, type AgentAdapter } from "@temper/core";
+import { audit, ensureDefaultEnvironment, loadWorkflows, openDb, seedAgents } from "@temper/core";
+import { accountOf, createAdapters } from "./adapters.ts";
 import { createApi } from "./api.ts";
 import { Auth, loadBoardToken } from "./auth.ts";
 import { useGithubUser } from "@temper/plugin-github";
-import { loadConfig, protectedDirs } from "./config.ts";
+import { loadConfig } from "./config.ts";
 import { loadProfile } from "./profile.ts";
 import { Factory } from "./factory.ts";
 
@@ -16,13 +16,10 @@ const { db, close } = await openDb(config.dataDir);
 await seedAgents(db);
 await ensureDefaultEnvironment(db, dirname(config.appRoot));
 
-const adapters = new Map<string, AgentAdapter>([["claude-cli", createClaudeCliAdapter({
-  bin: config.claudeBin,
-  alwaysDenyDirs: protectedDirs(config),
-})]]);
+const adapters = createAdapters(config, profile);
 const workflows = loadWorkflows(join(config.appRoot, "workflows"));
 const auth = new Auth(loadBoardToken(join(config.secretsDir, "board-token"), process.env.TEMPER_BOARD_TOKEN), config.port);
-const factory = new Factory(db, config, adapters, workflows, { auth, profile });
+const factory = new Factory(db, config, adapters, workflows, { auth, profile, accountOf: (a) => accountOf(config, a) });
 const app = createApi(db, factory, config, { auth, profile });
 
 const server = serve({ fetch: app.fetch, port: config.port, hostname: "127.0.0.1" }, async ({ port }) => {

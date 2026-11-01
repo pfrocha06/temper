@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 // temper — operate the local factory: service, releases, projects, specs.
-import { readFileSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { mkdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { createClaudeCliAdapter } from "@temper/adapter-claude-cli";
+import { codexAccount, resolveBin } from "@temper/adapter-codex-cli";
+import { createAdapters } from "./adapters.ts";
 import { join } from "node:path";
 import { loadBoardToken } from "./auth.ts";
 import { loadConfig, protectedDirs } from "./config.ts";
 import { probeGateIsolation, probeIsolation } from "./probe.ts";
+import { loadProfile } from "./profile.ts";
 import { activate, backupDatabase, buildRelease, readState, restoreDatabase, waitHealthy, waitStopped } from "./releases.ts";
 import { run } from "./exec.ts";
 import { installService, serviceInstalled, uninstallService } from "./service.ts";
@@ -83,7 +86,9 @@ const help = `temper <command>
   project add --name N --repo PATH [--remote URL] [--holdouts PATH] [--setup CMD] [--test CMD] [--app CMD] [--health PATH] [--holdouts-cmd CMD] [--holdouts-setup CMD]
   import-spec --project ID --file SPEC.md [--title T] [--start]
   import-jira --project ID (--issue KEY | --jql "…") [--start]
-  probe-isolation --holdouts PATH   check a Builder run, and the gate commands that run its code, cannot read holdouts or secrets, or use the board API
+  probe-isolation --holdouts PATH   check runs of every enabled adapter, and the gate commands that run Builder code, cannot read holdouts or secrets, or use the board API
+  codex login | logout | status  sign Temper's own Codex in or out (kept apart from ~/.codex)
+  codex setup                    Windows: set up Codex's elevated sandbox for Temper (one admin prompt)
 `;
 
 switch (command) {
@@ -201,19 +206,31 @@ switch (command) {
   case "probe-isolation": {
     const { values } = parseArgs({ args: rest, options: { holdouts: { type: "string" } } });
     if (!values.holdouts) throw new Error("usage: temper probe-isolation --holdouts PATH");
-    const r = await probeIsolation(createClaudeCliAdapter({ bin: config.claudeBin }), [resolve(values.holdouts), config.secretsDir], `http://127.0.0.1:${config.port}`);
-    const attempts = r.transcript.split("\n").filter((l) => l.includes('"kind":"tool_use"')).map((l) => {
-      const e = JSON.parse(l) as { tool: string; input: { command?: string; file_path?: string; pattern?: string } };
-      return `${e.tool} ${e.input.command ?? e.input.file_path ?? e.input.pattern ?? ""}`.slice(0, 120);
-    });
-    log(`attempts (${attempts.length}):\n${attempts.map((a) => `  - ${a}`).join("\n")}`);
-    const inconclusive = !r.leaked && !r.apiOpen && r.attempts < 8;
-    if (r.leaked || r.apiOpen) log(`✗ LEAK:${r.leaked ? " a protected canary was read" : ""}${r.apiOpen ? " the board API answered 200" : ""}`);
-    else if (inconclusive) log(`? INCONCLUSIVE: only ${r.attempts} attempts; isolation is not proven`);
-    else log("✓ isolated: no protected canary was readable and the board API refused the agent");
-    if (r.leaked || r.apiOpen || inconclusive) {
-      log(r.transcript.slice(-3000));
-      process.exitCode = 1;
+    // Every adapter the profile enables: each one is trusted only once its own runs are probed.
+    const adapters = createAdapters(config, loadProfile(config.home));
+    if (adapters.size === 0) throw new Error("the profile enables no adapters");
+    for (const [id, adapter] of adapters) {
+      log(`\n── ${id}`);
+      const r = await probeIsolation(adapter, [resolve(values.holdouts), config.secretsDir], `http://127.0.0.1:${config.port}`).catch((err: Error) => err);
+      if (r instanceof Error) {
+        log(`✗ could not run: ${r.message}`);
+        process.exitCode = 1;
+        continue;
+      }
+      const attempts = r.transcript.split("\n").filter((l) => l.includes('"kind":"tool_use"')).map((l) => {
+        const e = JSON.parse(l) as { tool: string; input: { command?: string; file_path?: string; pattern?: string } };
+        return `${e.tool} ${e.input?.command ?? e.input?.file_path ?? e.input?.pattern ?? ""}`.slice(0, 120);
+      });
+      log(`attempts (${attempts.length}):\n${attempts.map((a) => `  - ${a}`).join("\n")}`);
+      const leak = r.leaked || r.apiOpen || r.internetOpen;
+      const inconclusive = !leak && r.attempts < 8;
+      if (leak) log(`✗ LEAK:${r.leaked ? " a protected canary was read" : ""}${r.apiOpen ? " the board API answered 200" : ""}${r.internetOpen ? " the internet answered" : ""}`);
+      else if (inconclusive) log(`? INCONCLUSIVE: only ${r.attempts} attempts; isolation is not proven`);
+      else log(`✓ ${id} isolated: no protected canary was readable, the board API refused the agent, no internet`);
+      if (leak || inconclusive) {
+        log(r.transcript.slice(-3000));
+        process.exitCode = 1;
+      }
     }
     // The server also runs Builder code itself (tests, the candidate app): probe that path too.
     const gate = await probeGateIsolation({ mode: config.gateSandbox, denyRead: [], allowRead: config.gateAllowRead }, [resolve(values.holdouts), ...protectedDirs(config)], `http://127.0.0.1:${config.port}`);
@@ -222,6 +239,24 @@ switch (command) {
       log(`✗ GATE LEAK${config.gateSandbox === "off" ? " (TEMPER_GATE_SANDBOX=off)" : ""}:\n${gate.problems.map((p) => `  - ${p}`).join("\n")}\n${gate.output.slice(-3000)}`);
       process.exitCode = 1;
     }
+    break;
+  }
+  case "codex": {
+    const [sub = "status", ...args] = rest;
+    if (sub === "status") {
+      const a = codexAccount(config.codexHome);
+      log(a.loggedIn ? `signed in${a.email ? ` as ${a.email}` : ""} (${a.method}${a.plan ? `, ${a.plan}` : ""})` : "not signed in: run `temper codex login`");
+      log(`CODEX_HOME ${config.codexHome}`);
+      if (!loadProfile(config.home).adapters.includes("codex-cli")) log("not enabled: add \"codex-cli\" to adapters in profile.json");
+      break;
+    }
+    const codexArgs = sub === "login" || sub === "logout" ? [sub, ...args] : sub === "setup" ? ["sandbox", "setup", "--elevated", "--codex-home", config.codexHome, ...args] : undefined;
+    if (!codexArgs) throw new Error("usage: temper codex login | logout | status | setup");
+    mkdirSync(config.codexHome, { recursive: true, mode: 0o700 });
+    // Interactive: the login opens a browser (or prints a device code); `setup` asks for admin once.
+    const bin = resolveBin(config.codexBin);
+    const code = await new Promise<number | null>((done) => spawn(bin.file, [...bin.args, ...codexArgs], { stdio: "inherit", env: { ...process.env, CODEX_HOME: config.codexHome } }).on("close", done).on("error", (e) => { log(`could not run ${config.codexBin}: ${e.message}`); done(1); }));
+    process.exitCode = code ?? 1;
     break;
   }
   default:
