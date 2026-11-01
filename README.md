@@ -148,18 +148,15 @@ JSON
 temper deploy        # macOS; on Linux and Windows run `temper serve` instead
 temper open
 
-# 3. Before trusting the factory, prove nothing can read your holdouts or secrets
-temper probe-isolation --holdouts <holdouts-checkout>
-
-# 4. Register a project
+# 3. Register a project. Temper creates its holdouts folder, ~/.temper/holdouts/myapp
 temper project add --name myapp --repo ~/code/myapp \
   --remote https://github.com/<owner>/myapp.git \
-  --holdouts ~/code/myapp-holdouts \
   --setup "pnpm install --frozen-lockfile" \
   --test "pnpm test" \
-  --app "pnpm start" --health /api/health \
-  --holdouts-setup "pnpm install --frozen-lockfile" \
-  --holdouts-cmd "node run.mjs"
+  --app "pnpm start" --health /api/health
+
+# 4. Before trusting the factory, prove nothing can read the holdouts or Temper's secrets
+temper probe-isolation --holdouts ~/.temper/holdouts/myapp
 
 # 5. Hand it work: the Chief of Staff splits the spec into tickets and starts them
 temper import-spec --project <id> --file spec.md --start
@@ -183,7 +180,7 @@ temper codex login
 temper codex setup        # Windows only: Codex's elevated sandbox, one admin prompt
 
 # 3. Prove it is isolated before giving it work, then pick it on the Agents screen
-temper probe-isolation --holdouts <holdouts-checkout>
+temper probe-isolation --holdouts ~/.temper/holdouts/<project>
 ```
 
 Codex runs in its own sandbox with a permission profile Temper writes per run: the workspace
@@ -193,16 +190,39 @@ private-network addresses; `probe-isolation` checks the internet, not your LAN.
 Temper refuses to dispatch to an adapter the profile doesn't enable, or one signed in to an account
 other than the one it pins, and records the refusal in the audit log.
 
-### The holdouts repository
+### Holdouts
 
-Holdouts live in their own git repository, outside the project, so the Builder never sees them
-([ADR 0001](docs/adr/0001-holdouts-in-a-separate-repository.md)):
+Each project has a holdouts folder: behaviour checks the Builder never sees, run by the server
+against the Builder's running app. It sits outside the project, because a checkout's git history
+would expose anything inside it ([ADR 0001](docs/adr/0001-holdouts-in-a-separate-repository.md)).
+`temper project add` creates it in `~/.temper/holdouts/<project>` from a
+[starter template](templates/holdouts); pass `--holdouts PATH` to use your own. It is a local git
+repository (Temper commits every change and rejects ones that weaken a check); a remote is
+optional, for backup.
 
-- `baseline/`: checks that must always pass.
-- `tickets/<ticket-id>/`: checks the Verifier writes for one ticket. Once it merges, they keep
-  running as regression checks.
-- Each `*.holdout.mjs` default-exports `async ({ url, candidatePath }) => [{ id, pass, message }]`.
+- `baseline/`: checks every version of the app must pass.
+- `tickets/<ticket-id>/`: checks for one ticket. Once it merges, they keep running as regression checks.
 - `run.mjs` runs them against `TEMPER_APP_URL` and prints one `AC-<id>: PASS|FAIL` line per check.
+
+Three ways to add checks:
+
+1. **Write acceptance criteria** (`AC-1: …`) in the ticket or spec. The Verifier turns each one
+   into a check.
+2. **Open a verification ticket** for checks that belong to no single feature. The Verifier writes
+   them, the Reviewer reviews them, and they wait for your approval.
+3. **Write one yourself** in `baseline/` and commit it:
+
+   ```js
+   import { assert, suite } from "../lib/check.mjs";
+   import { get } from "../lib/http.mjs";
+
+   export default suite(async (check, { url }) => {
+     await check("health", async () => {
+       const { status } = await get(url, "/api/health");
+       assert(status === 200, `status ${status}`);
+     });
+   });
+   ```
 
 ## Platform support
 

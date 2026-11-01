@@ -45,7 +45,7 @@ need no Codex login.
 These protect the separation of powers, so the maintainer reviews them closely:
 
 - the agent adapter, sandbox settings, or anything that decides what an agent can read or reach.
-  Re-run `node apps/server/src/cli.ts probe-isolation --holdouts <holdouts-checkout>` and say so in the PR.
+  Re-run `temper probe-isolation --holdouts <holdouts-folder>` and say so in the PR.
 - the Verifier, holdouts handling, the gates, the diff guard, and workflows that touch verification
 - board authentication and agent capabilities
 

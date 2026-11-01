@@ -23,3 +23,9 @@ has a Builder-configured run try eight ways to read it (Read, Grep, Glob, cat, n
 copy-then-read, symlink-then-read). The first run found a real leak: permission rules with a
 single leading `/` are relative, so the Read tool was not denied. Absolute rules use `//`, and
 the sandbox disallows unsandboxed commands. Re-run the probe after any adapter or CLI upgrade.
+
+## Update
+`temper project add` now creates the holdouts repository itself, as a local git folder in
+`~/.temper/holdouts/<project>` started from `templates/holdouts`. What keeps it private is that no
+Builder run or gate command can read it; a remote is optional, for backup, and its visibility is
+the board's choice.

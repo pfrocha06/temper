@@ -43,6 +43,7 @@ import {
   type Role,
 } from "@temper/core";
 import type { Config } from "./config.ts";
+import { defaultHoldoutsPath, initHoldouts, STARTER_HOLDOUTS_COMMAND } from "./holdouts.ts";
 import type { Factory } from "./factory.ts";
 import { setCookie } from "hono/cookie";
 import { createAgentApi } from "./agent-api.ts";
@@ -124,7 +125,19 @@ export function createApi(db: Db, factory: Factory, config: Config, opts: { upti
   app.post("/api/resume", async (c) => (await factory.setPaused(false), c.json({ ok: true })));
 
   app.get("/api/projects", async (c) => c.json(await listProjects(db)));
-  app.post("/api/projects", async (c) => c.json(await createProject(db, NewProject.parse(await c.req.json())), 201));
+  app.post("/api/projects", async (c) => {
+    const input = NewProject.parse(await c.req.json());
+    // Every project gets a holdouts folder: the one named, or one Temper keeps, started from the template.
+    const holdoutsPath = input.holdoutsPath ?? defaultHoldoutsPath(config.home, input.name);
+    let created: boolean;
+    try {
+      ({ created } = await initHoldouts(holdoutsPath, join(config.appRoot, "templates", "holdouts")));
+    } catch (err) {
+      return c.json({ error: (err as Error).message }, 400);
+    }
+    const holdoutsCommand = input.holdoutsCommand ?? (created ? STARTER_HOLDOUTS_COMMAND : undefined);
+    return c.json(await createProject(db, { ...input, holdoutsPath, holdoutsCommand }), 201);
+  });
   app.patch("/api/projects/:id", async (c) => c.json(await updateProject(db, c.req.param("id"), NewProject.partial().parse(await c.req.json()))));
 
   app.get("/api/tickets", async (c) => c.json(await listTickets(db, c.req.query("projectId"))));

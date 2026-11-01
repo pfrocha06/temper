@@ -83,7 +83,7 @@ const help = `temper <command>
   start | stop                   install/uninstall the launchd service for the current release
   status                         service, release and factory status
   pause | resume                 stop/start dispatching new work
-  project add --name N --repo PATH [--remote URL] [--holdouts PATH] [--setup CMD] [--test CMD] [--app CMD] [--health PATH] [--holdouts-cmd CMD] [--holdouts-setup CMD]
+  project add --name N --repo PATH [--remote URL] [--holdouts PATH (default: ~/.temper/holdouts/N)] [--setup CMD] [--test CMD] [--app CMD] [--health PATH] [--holdouts-cmd CMD] [--holdouts-setup CMD]
   import-spec --project ID --file SPEC.md [--title T] [--start]
   import-jira --project ID (--issue KEY | --jql "…") [--start]
   probe-isolation --holdouts PATH   check runs of every enabled adapter, and the gate commands that run Builder code, cannot read holdouts or secrets, or use the board API
