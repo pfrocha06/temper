@@ -51,7 +51,8 @@ function inSandbox(code: string, r = req()): Promise<string> {
 }
 const tryWrite = (file: string) => `try{require('fs').writeFileSync(${JSON.stringify(file)},'x');console.log('WROTE')}catch(e){console.log('DENIED',e.code)}`;
 
-describe.runIf(enabled)("codex sandbox enforces the run's permission profile", () => {
+// Each `codex sandbox` start takes seconds on Windows.
+describe.runIf(enabled)("codex sandbox enforces the run's permission profile", { timeout: 60_000 }, () => {
   let app: Server;
   let appUrl = "";
   beforeAll(async () => {
@@ -92,7 +93,8 @@ describe.runIf(enabled)("codex sandbox enforces the run's permission profile", (
     expect(out).not.toMatch(/NET d/);
   });
 
-  it("reaches the candidate app on the host's loopback when the run needs it, never the internet", async () => {
+  // Windows: the host's loopback is unreachable from Codex's sandbox; the adapter says so instead.
+  it.skipIf(process.platform === "win32")("reaches the candidate app on the host's loopback when the run needs it, never the internet", async () => {
     const out = await inSandbox(`fetch(${JSON.stringify(appUrl)}).then(r=>r.text()).then(t=>console.log('LOOP',t)).catch(e=>console.log('LOOPERR',e.cause?.code||e.message));${net}`, req({ hostLoopback: true }));
     expect(out).toContain("LOOP HOSTAPP");
     expect(out).toContain("NETERR");

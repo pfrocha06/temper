@@ -61,5 +61,7 @@ export interface AgentAdapter {
   readonly id: string;
   /** Whether runs are isolated from the user's own CLI config (skills, memory, MCP servers). */
   readonly isolated: boolean;
+  /** Whether commands in a run can reach the host's 127.0.0.1 (the Verifier's candidate app). Default true. */
+  readonly reachesHostLoopback?: boolean;
   run(req: RunRequest, onEvent: (e: RunEvent) => void): Promise<RunResult>;
 }

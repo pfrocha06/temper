@@ -569,6 +569,9 @@ export class Factory extends EventEmitter {
       addDirs.push(worktree);
       disallowed.push(`Edit(${worktree}/**)`, `Write(${worktree}/**)`);
       holdoutsBefore = await headSha(cwd);
+      if (project.appCommand && adapter.reachesHostLoopback === false) {
+        return { verdict: "BLOCKED", summary: `The ${agent.adapter} adapter cannot reach the candidate app from its sandbox on this platform. Run the Verifier on another adapter (Agents screen).` };
+      }
       if (project.appCommand) {
         const sandbox = await this.sandboxFor(project);
         app = await bootApp(project.appCommand, worktree, project.appHealthPath, sandbox).catch(() => undefined);

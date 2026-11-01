@@ -212,7 +212,7 @@ Holdouts live in their own git repository, outside the project, so the Builder n
 | Gate sandbox (Builder tests, candidate app) | ✅ built in | ✅ `bubblewrap`, `socat`, `ripgrep` ¹ | ✅ alpha, one-time setup ² |
 | Background service (`temper start`) | ✅ launchd | run `temper serve` under your own service manager | run `temper serve` under your own service manager |
 | Agent runs sandboxed (by the `claude` CLI) | ✅ | ✅ | check with `probe-isolation` |
-| Agent runs sandboxed (by the `codex` CLI) | ✅ | ✅ | ✅ needs `temper codex setup` |
+| Agent runs sandboxed (by the `codex` CLI) | ✅ | ✅ | ✅ needs `temper codex setup`; no network, so keep the Verifier on Claude |
 
 CI runs the full suite on all three, with the real sandbox installed.
 

@@ -16,7 +16,7 @@ describe("toml", () => {
 
 describe("permissionProfile", () => {
   it("writes the workspace and extra dirs, denies protected dirs, keeps the candidate read-only", () => {
-    const p = permissionProfile({ ...base, addDirs: ["/repo/.git/"], readOnlyDirs: ["/cand"], denyDirs: ["/holdouts", "/secrets"] });
+    const p = permissionProfile({ ...base, addDirs: ["/repo/.git/"], readOnlyDirs: ["/cand"], denyDirs: ["/holdouts", "/secrets"] }, "linux");
     expect(p).toEqual({
       extends: ":workspace",
       filesystem: { "/repo/.git": "write", "/cand": "read", "/holdouts": "deny", "/secrets": "deny" },
@@ -25,7 +25,7 @@ describe("permissionProfile", () => {
   });
 
   it("reaches the host's loopback through the proxy only when the run needs the candidate app", () => {
-    expect(permissionProfile({ ...base, hostLoopback: true }).network).toEqual({ enabled: true, allow_local_binding: false, domains: { localhost: "allow", "127.0.0.1": "allow" } });
+    expect(permissionProfile({ ...base, hostLoopback: true }, "linux").network).toEqual({ enabled: true, allow_local_binding: false, domains: { localhost: "allow", "127.0.0.1": "allow" } });
   });
 
   it("starts read-only runs from the read-only profile and grants no writes", () => {
@@ -34,10 +34,12 @@ describe("permissionProfile", () => {
     expect(p.filesystem).toEqual({});
   });
 
-  it("always runs the network proxy, and asks for the elevated sandbox on Windows", () => {
+  it("runs the network proxy, except on Windows, where the network is off and the sandbox elevated", () => {
     expect(sandboxArgs(base, "linux")).toContain("network_proxy");
     expect(sandboxArgs(base, "linux").join(" ")).not.toContain("windows.sandbox");
     expect(sandboxArgs(base, "win32").join(" ")).toContain('windows.sandbox="elevated"');
+    expect(sandboxArgs(base, "win32")).not.toContain("network_proxy");
+    expect(permissionProfile({ ...base, hostLoopback: true }, "win32").network).toEqual({ enabled: false });
   });
 });
 

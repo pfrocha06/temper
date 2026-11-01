@@ -69,8 +69,13 @@ const norm = (p: string) => p.replace(/[\\/]+$/, "");
  * the host's loopback (`hostLoopback`, the Verifier on Linux): there the sandbox has its own
  * network namespace, and only the proxy reaches the candidate app on the host. On macOS, local
  * binding may also let commands reach private-network addresses.
+ *
+ * Windows is different: there Codex's proxy lets HTTP through to the internet whatever the domain
+ * rules say, and the host's loopback is unreachable from the sandbox either way. So the network
+ * is off; local servers inside the sandbox still work, and the Verifier, which needs the host's
+ * candidate app, cannot run on Codex (`reachesHostLoopback`).
  */
-export function permissionProfile(req: RunRequest): Record<string, unknown> {
+export function permissionProfile(req: RunRequest, platform: NodeJS.Platform = process.platform): Record<string, unknown> {
   const filesystem: Record<string, string> = {};
   if (!req.readOnly) for (const d of req.addDirs ?? []) filesystem[norm(d)] = "write";
   for (const d of req.readOnlyDirs ?? []) filesystem[norm(d)] = "read";
@@ -78,7 +83,10 @@ export function permissionProfile(req: RunRequest): Record<string, unknown> {
   return {
     extends: req.readOnly ? ":read-only" : ":workspace",
     filesystem,
-    network: { enabled: true, allow_local_binding: !req.hostLoopback, domains: { localhost: "allow", "127.0.0.1": "allow" } },
+    network:
+      platform === "win32"
+        ? { enabled: false }
+        : { enabled: true, allow_local_binding: !req.hostLoopback, domains: { localhost: "allow", "127.0.0.1": "allow" } },
   };
 }
 
@@ -91,10 +99,8 @@ export function sandboxArgs(req: RunRequest, platform = process.platform): strin
   const c = (key: string, value: unknown) => ["-c", `${key}=${toml(value)}`];
   return [
     ...c("default_permissions", "temper"),
-    ...c("permissions", { temper: permissionProfile(req) }),
-    "--enable",
-    "network_proxy",
-    ...(platform === "win32" ? [...c("windows.sandbox", "elevated"), "--enable", "prefer_mxc"] : []),
+    ...c("permissions", { temper: permissionProfile(req, platform) }),
+    ...(platform === "win32" ? [...c("windows.sandbox", "elevated"), "--enable", "prefer_mxc"] : ["--enable", "network_proxy"]),
   ];
 }
 
@@ -264,6 +270,7 @@ export function createCodexCliAdapter(options: CodexCliOptions): AgentAdapter {
   return {
     id: "codex-cli",
     isolated: true,
+    reachesHostLoopback: process.platform !== "win32",
     run(req, onEvent) {
       if (!existsSync(join(options.codexHome, "auth.json"))) {
         return Promise.reject(new Error(`Codex is not signed in for Temper: run 'temper codex login' (CODEX_HOME ${options.codexHome})`));
