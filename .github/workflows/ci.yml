@@ -41,3 +41,33 @@ jobs:
           echo TEMPER_TEST_SRT=1 >> "$GITHUB_ENV"
 
       - run: pnpm check
+
+  # The one-line installers, run for real against this commit on every platform.
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # actions/checkout leaves a detached HEAD; give the installer a branch to clone.
+      - run: git checkout -q -B ci-install
+      - name: install.sh
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          TEMPER_REPO="$GITHUB_WORKSPACE" TEMPER_REF=ci-install sh install.sh
+          TEMPER_REPO="$GITHUB_WORKSPACE" TEMPER_REF=ci-install sh install.sh  # again: the update path
+          ~/.local/bin/temper help
+      - name: install.ps1 (Windows PowerShell 5.1, as `irm | iex` runs it)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $env:TEMPER_REPO = $env:GITHUB_WORKSPACE; $env:TEMPER_REF = "ci-install"
+          Get-Content install.ps1 -Raw | Invoke-Expression
+          Get-Content install.ps1 -Raw | Invoke-Expression
+          temper help

@@ -11,7 +11,7 @@ You set direction, approve merges, and hand over autonomy only as it is earned.
 
 [![CI](https://github.com/pfrocha06/temper/actions/workflows/ci.yml/badge.svg)](https://github.com/pfrocha06/temper/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Node.js ≥ 22](https://img.shields.io/badge/node-%E2%89%A5%2022-339933.svg)](https://nodejs.org)
+[![Node.js ≥ 22.18](https://img.shields.io/badge/node-%E2%89%A5%2022.18-339933.svg)](https://nodejs.org)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](#platform-support)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
@@ -95,8 +95,33 @@ flowchart LR
 
 ## Quick start
 
-You need [Node.js](https://nodejs.org) ≥ 22, pnpm, git, the [GitHub CLI](https://cli.github.com/)
+You need [Node.js](https://nodejs.org) 22.18 or later, git, the [GitHub CLI](https://cli.github.com/)
 and the [Claude Code CLI](https://docs.claude.com/en/docs/claude-code), both signed in.
+
+**macOS and Linux**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/pfrocha06/temper/main/install.sh | sh
+```
+
+**Windows** (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/pfrocha06/temper/main/install.ps1 | iex
+```
+
+The installer:
+
+1. checks your tools, and says what is missing and where to get it
+2. clones Temper into `~/.temper/src`, installs its packages and builds the console
+3. sets up the gate sandbox: `bubblewrap`, `socat` and `ripgrep` on Linux (through `sudo`),
+   the `srt-sandbox` account on Windows (one admin prompt); nothing on macOS
+4. puts a `temper` command on your PATH
+
+Run it again to update. Read it first if you like: [install.sh](install.sh), [install.ps1](install.ps1).
+`TEMPER_DIR`, `TEMPER_BIN_DIR`, `TEMPER_REF` and `TEMPER_NO_DEPS=1` change what it does.
+
+### From source
 
 ```sh
 git clone https://github.com/pfrocha06/temper.git
@@ -105,6 +130,8 @@ pnpm install
 pnpm check      # tests, typecheck and the company-agnostic check
 pnpm dev        # console on http://localhost:5173, server on :4610, with its own data
 ```
+
+In a checkout, `node apps/server/src/cli.ts` is the `temper` command.
 
 ## Running Temper
 
@@ -116,14 +143,14 @@ cat > ~/.temper/profile.json <<'JSON'
 JSON
 
 # 2. Build, verify and start a release (console on http://127.0.0.1:4600), then sign in as the board
-node apps/server/src/cli.ts deploy --ref main
-node apps/server/src/cli.ts open
+temper deploy        # macOS; on Linux and Windows run `temper serve` instead
+temper open
 
 # 3. Before trusting the factory, prove nothing can read your holdouts or secrets
-node apps/server/src/cli.ts probe-isolation --holdouts <holdouts-checkout>
+temper probe-isolation --holdouts <holdouts-checkout>
 
 # 4. Register a project
-node apps/server/src/cli.ts project add --name myapp --repo ~/code/myapp \
+temper project add --name myapp --repo ~/code/myapp \
   --remote https://github.com/<owner>/myapp.git \
   --holdouts ~/code/myapp-holdouts \
   --setup "pnpm install --frozen-lockfile" \
@@ -133,11 +160,11 @@ node apps/server/src/cli.ts project add --name myapp --repo ~/code/myapp \
   --holdouts-cmd "node run.mjs"
 
 # 5. Hand it work: the Chief of Staff splits the spec into tickets and starts them
-node apps/server/src/cli.ts import-spec --project <id> --file spec.md --start
+temper import-spec --project <id> --file spec.md --start
 ```
 
 `temper rollback` returns to the previous release and `temper pause` stops new work.
-`node apps/server/src/cli.ts help` lists every command.
+`temper help` lists every command.
 
 ### The holdouts repository
 
@@ -155,20 +182,21 @@ Holdouts live in their own git repository, outside the project, so the Builder n
 | | macOS | Linux | Windows |
 |---|:---:|:---:|:---:|
 | Server, console and CLI | ✅ | ✅ | ✅ |
-| Gate sandbox (Builder tests, candidate app) | ✅ built in | ✅ needs `bubblewrap`, `socat`, `ripgrep` | ✅ alpha, needs a one-time install ¹ |
+| Gate sandbox (Builder tests, candidate app) | ✅ built in | ✅ `bubblewrap`, `socat`, `ripgrep` ¹ | ✅ alpha, one-time setup ² |
 | Background service (`temper start`) | ✅ launchd | run `temper serve` under your own service manager | run `temper serve` under your own service manager |
 | Agent runs sandboxed (by the `claude` CLI) | ✅ | ✅ | check with `probe-isolation` |
 
 CI runs the full suite on all three, with the real sandbox installed.
 
-¹ Run `pnpm --filter @temper/server exec srt windows-install` once (one UAC prompt). It creates a
-dedicated `srt-sandbox` account and firewall rules for it; `windows-uninstall` removes them. That
+¹ The installer installs them. Ubuntu 24.04 and later also need
+`sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` for bubblewrap; the installer
+tells you when.
+
+² The installer runs `srt windows-install` (one UAC prompt); from a checkout, run
+`pnpm --filter @temper/server exec srt windows-install`. It creates a dedicated `srt-sandbox` account and firewall rules for it; `windows-uninstall` removes them. That
 account can't see inside your user profile, so on Windows worktrees and gate scratch files live
 under `%ProgramData%\temper`, while holdouts and secrets stay in your profile, out of its reach.
 Install tools machine-wide, or list per-user tool folders in `TEMPER_GATE_ALLOW_READ`.
-
-Ubuntu 24.04 and later also need `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`
-for bubblewrap.
 
 ## Configuration
 
