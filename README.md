@@ -71,8 +71,8 @@ flowchart LR
   gates --> review["Review<br/>Reviewer, adversarial"]
   review --> pr["PR<br/>opened by the server"]
   pr --> board{{"You merge"}}
-  gates -. "fail: failing criterion IDs only" .-> build
-  review -. "fail: findings" .-> build
+  gates -.->|"fail: failing criterion IDs only"| build
+  review -.->|"fail: findings"| build
 ```
 
 | Role | Does | Never |
