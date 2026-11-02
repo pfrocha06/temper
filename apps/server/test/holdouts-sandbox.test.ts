@@ -164,12 +164,25 @@ describe.runIf(srtAvailable && process.platform === "linux")("a holdout that lea
   it("has it killed when the run ends", async () => {
     const out = mkdtempSync(join(gateScratchRoot(), "temper-linger-"));
     const beat = join(out, "heartbeat.txt");
-    const code = `require("fs").appendFileSync(${JSON.stringify(beat)}, "C"); setInterval(() => require("fs").appendFileSync(${JSON.stringify(beat)}, "."), 100)`;
+    // Static scripts; the heartbeat path reaches them as data (linger.json), never as code.
+    const holdouts = ctx.project.holdoutsPath!;
+    writeFileSync(join(holdouts, "linger.json"), JSON.stringify({ beat }));
     writeFileSync(
-      join(ctx.project.holdoutsPath!, "linger.mjs"),
+      join(holdouts, "beat.cjs"),
+      `const fs = require("node:fs");
+const beat = process.argv[2];
+fs.appendFileSync(beat, "C");
+setInterval(() => fs.appendFileSync(beat, "."), 100);
+`,
+    );
+    writeFileSync(
+      join(holdouts, "linger.mjs"),
       `import { spawn } from "node:child_process";
-spawn(process.execPath, ["-e", ${JSON.stringify(code)}], { detached: true, stdio: "ignore" }).unref();
-await new Promise((r) => setTimeout(r, 500));`,
+import { readFileSync } from "node:fs";
+const { beat } = JSON.parse(readFileSync("linger.json", "utf8"));
+spawn(process.execPath, ["beat.cjs", beat], { detached: true, stdio: "ignore" }).unref();
+await new Promise((r) => setTimeout(r, 500));
+`,
     );
     try {
       // The holdouts policy, with a folder the test can watch from outside.
