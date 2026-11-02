@@ -1,14 +1,15 @@
 // SEC-01 (#36): the holdouts gate runs Verifier-written code. Under srt it reads the candidate
 // and reaches the candidate app, and nothing else: no Temper secret, no other ticket's worktree,
 // no user credential, no write to the holdouts or the candidate, no internet, no server env.
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { srtAvailable } from "./helpers/srt.ts";
 import type { Project, Ticket } from "@temper/core";
+import { runSandboxed } from "../src/exec.ts";
 import { holdouts, type GateContext } from "../src/gates/run.ts";
 import { gateScratchRoot, type Sandbox } from "../src/sandbox.ts";
 
-const srtAvailable = process.platform === "darwin" || process.env.TEMPER_TEST_SRT === "1";
 
 /** A holdout runner that tries every way out, then does what a real holdout does. */
 const RUNNER = String.raw`
@@ -154,4 +155,46 @@ describe("holdouts check", () => {
     },
     180_000,
   );
+});
+
+// AC-2 (SEC-04): sandboxed code cannot leave a process behind. On Linux srt runs the command in its
+// own PID namespace, which dies with it; macOS and Windows keep such a process inside the same
+// sandbox profile, so there it outlives the run but stays confined (docs/security/execution-boundaries.md).
+describe.runIf(srtAvailable && process.platform === "linux")("a holdout that leaves a process behind", () => {
+  it("has it killed when the run ends", async () => {
+    const out = mkdtempSync(join(gateScratchRoot(), "temper-linger-"));
+    const beat = join(out, "heartbeat.txt");
+    // Static scripts; the heartbeat path reaches them as data (linger.json), never as code.
+    const holdouts = ctx.project.holdoutsPath!;
+    writeFileSync(join(holdouts, "linger.json"), JSON.stringify({ beat }));
+    writeFileSync(
+      join(holdouts, "beat.cjs"),
+      `const fs = require("node:fs");
+const beat = process.argv[2];
+fs.appendFileSync(beat, "C");
+setInterval(() => fs.appendFileSync(beat, "."), 100);
+`,
+    );
+    writeFileSync(
+      join(holdouts, "linger.mjs"),
+      `import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
+const { beat } = JSON.parse(readFileSync("linger.json", "utf8"));
+spawn(process.execPath, ["beat.cjs", beat], { detached: true, stdio: "ignore" }).unref();
+await new Promise((r) => setTimeout(r, 500));
+`,
+    );
+    try {
+      // The holdouts policy, with a folder the test can watch from outside.
+      const r = await runSandboxed(`"${process.execPath}" linger.mjs`, ctx.holdoutsSandbox!, { cwd: ctx.project.holdoutsPath!, readOnlyCwd: true, allowWrite: [out], timeoutMs: 30_000 });
+      expect(r.code).toBe(0);
+      const size = existsSync(beat) ? readFileSync(beat, "utf8").length : 0;
+      // It did run while the holdout did, so the check below is not vacuous.
+      expect(size).toBeGreaterThan(1);
+      await new Promise((res) => setTimeout(res, 1000));
+      expect(readFileSync(beat, "utf8").length).toBe(size);
+    } finally {
+      rmSync(out, { recursive: true, force: true });
+    }
+  }, 60_000);
 });

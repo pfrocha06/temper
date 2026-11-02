@@ -12,6 +12,7 @@
     "test": "pnpm -r --workspace-concurrency=1 test",
     "vendor:skills": "node scripts/vendor-skills.mjs",
     "check": "pnpm typecheck && pnpm test",
+    "test:security": "pnpm --filter @temper/server exec vitest run test/boundaries.test.ts test/sandbox.test.ts test/holdouts-sandbox.test.ts test/setup.test.ts test/secret-scan.test.ts && pnpm --filter @temper/core exec vitest run test/agent-env.test.ts",
     "dev": "TEMPER_INSTANCE=dev TEMPER_PORT=4610 TEMPER_API_URL=http://127.0.0.1:4610 pnpm --parallel --filter @temper/server --filter @temper/web dev"
   },
   "license": "MIT",

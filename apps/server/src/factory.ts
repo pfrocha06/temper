@@ -70,6 +70,7 @@ import { runSetupCommand, runSetupOnce, setupCaches, setupKey } from "./setup.ts
 import { diffGuard } from "./gates/diff-guard.ts";
 import { builderFeedback as holdoutFeedback, parseHoldoutResults } from "./gates/holdout-results.ts";
 import { issueLine } from "./github-import.ts";
+import { scanThenPush } from "./gates/secret-scan.ts";
 import { runChecks } from "./gates/run.ts";
 import {
   changedBetween,
@@ -94,6 +95,8 @@ export type FactoryOptions = {
   profile?: Profile;
   /** The account an adapter's CLI is signed in as (email), for profiles that pin one. */
   accountOf?: (adapter: string) => Promise<string | undefined>;
+  /** Replaces the gate isolation probe (tests: a sandbox that fails it). */
+  probeGate?: () => Promise<GateProbeResult>;
 };
 
 const ACCOUNT_CHECK_MS = 5 * 60_000;
@@ -329,7 +332,7 @@ export class Factory extends EventEmitter {
   }
 
   private async probeGateSandbox(): Promise<GateProbeResult> {
-    const probe = await probeGateIsolation({ mode: this.config.gateSandbox, denyRead: [], allowRead: this.config.gateAllowRead }, protectedDirs(this.config), `http://127.0.0.1:${this.config.port}`).catch(
+    const probe = await (this.options.probeGate ?? (() => probeGateIsolation({ mode: this.config.gateSandbox, denyRead: [], allowRead: this.config.gateAllowRead }, protectedDirs(this.config), `http://127.0.0.1:${this.config.port}`)))().catch(
       (err): GateProbeResult => ({ isolated: false, problems: [`the probe crashed: ${(err as Error).message}`], output: "" }),
     );
     await audit(this.db, { actor: "system", kind: probe.isolated ? "gate_sandbox.verified" : "gate_sandbox.failed", data: { problems: probe.problems } });
@@ -745,6 +748,7 @@ export class Factory extends EventEmitter {
         worktree,
         sandbox: await this.sandboxFor(project),
         holdoutsSandbox: stage.checks.includes("holdouts") ? await this.holdoutsSandboxFor(project, worktree) : undefined,
+        gitleaks: this.config.gitleaks,
         regressionTickets: await this.regressionTickets(project.id),
         signal,
         onEvent,
@@ -766,7 +770,12 @@ export class Factory extends EventEmitter {
   private async runPrGate(ticket: Ticket, stage: GateStage, project: Project, worktree: string): Promise<StageOutcome> {
     if (stage.checks.includes("open_pr") && !ticket.prUrl) {
       if (!project.remoteUrl) return { verdict: "BLOCKED", summary: "Project has no remote; cannot open a PR." };
-      await pushBranch(worktree, ticket.branch!);
+      // Whatever reaches the remote is scanned right before it goes, whichever gates ran earlier.
+      const scan = await scanThenPush(worktree, baseRef(project), ticket.branch!, this.config.gitleaks, pushBranch);
+      if (!scan.ok) {
+        await audit(this.db, { actor: "system", kind: "secret_scan.blocked_push", subject: ticket.id, data: { report: scan.report.slice(0, 2000) } });
+        return { verdict: "FAIL", summary: `Not pushed: the secret scan did not pass.\n\n${scan.report}` };
+      }
       const arts = new Map((await latestArtifacts(this.db, ticket.id)).map((a) => [a.name, a.content]));
       const changes = await changedFiles(worktree, baseRef(project));
       const areas = [...new Set(changes.map((c) => c.path.split("/").slice(0, 2).join("/")))];

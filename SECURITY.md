@@ -28,6 +28,8 @@ Anything that breaks the trust model in [docs/design.md](docs/design.md), for ex
 - secrets leaking into the audit log, artifacts, the console or a PR
 - bypassing board authentication on the local API (including DNS rebinding)
 
+[docs/security/execution-boundaries.md](docs/security/execution-boundaries.md) lists every path
+that runs code Temper does not control, its sandbox policy and its tests (`pnpm test:security`).
 `node apps/server/src/cli.ts probe-isolation --holdouts <path>` checks the main agent-isolation
 guarantees. A way to make it pass while isolation is broken is in scope too.
 

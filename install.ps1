@@ -51,6 +51,7 @@ function Install-Temper {
 
   if (Has claude) { Ok "claude CLI found" } else { Warn "Claude Code CLI not found: install it from https://docs.claude.com/en/docs/claude-code and sign in" }
   if (Has gh) { Ok "GitHub CLI found" } else { Warn "GitHub CLI not found: install it from https://cli.github.com and run 'gh auth login'" }
+  if (Has gitleaks) { Ok "gitleaks found" } else { Warn "gitleaks not found: Temper pushes no changes without it. Install it with: winget install gitleaks" }
 
   # -------------------------------------------------------------------------------------------
   Step "Getting Temper"
