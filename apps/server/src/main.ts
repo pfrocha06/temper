@@ -8,6 +8,7 @@ import { useGithubUser } from "@temper/plugin-github";
 import { loadConfig } from "./config.ts";
 import { loadProfile } from "./profile.ts";
 import { Factory } from "./factory.ts";
+import { Updater } from "./updates.ts";
 
 const config = loadConfig();
 const profile = loadProfile(config.home);
@@ -20,7 +21,11 @@ const adapters = createAdapters(config, profile);
 const workflows = loadWorkflows(join(config.appRoot, "workflows"));
 const auth = new Auth(loadBoardToken(join(config.secretsDir, "board-token"), process.env.TEMPER_BOARD_TOKEN), config.port);
 const factory = new Factory(db, config, adapters, workflows, { auth, profile, accountOf: (a) => accountOf(config, a) });
-const app = createApi(db, factory, config, { auth, profile });
+// The main instance looks for newer commits on its source's origin; dev and preview instances do not.
+const updater = new Updater({ home: config.home, appRoot: config.appRoot });
+const checkUpdates = (process.env.TEMPER_UPDATE_CHECK ?? (config.instance === "main" ? "1" : "0")) !== "0";
+if (checkUpdates) updater.start();
+const app = createApi(db, factory, config, { auth, profile, updater });
 
 const server = serve({ fetch: app.fetch, port: config.port, hostname: "127.0.0.1" }, async ({ port }) => {
   await audit(db, { actor: "system", kind: "server.started", data: { instance: config.instance, port } });

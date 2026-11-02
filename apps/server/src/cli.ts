@@ -13,7 +13,7 @@ import { probeGateIsolation, probeIsolation } from "./probe.ts";
 import { loadProfile } from "./profile.ts";
 import { activate, backupDatabase, buildRelease, readState, restoreDatabase, waitHealthy, waitStopped } from "./releases.ts";
 import { run } from "./exec.ts";
-import { installService, serviceInstalled, uninstallService } from "./service.ts";
+import { installService, serviceInstalled, serviceKind, snapshotService, uninstallService } from "./service.ts";
 
 const config = loadConfig();
 const [command = "help", ...rest] = process.argv.slice(2);
@@ -48,9 +48,44 @@ async function importEach(projectId: string, query: Record<string, unknown> & { 
   return candidates.length;
 }
 
-async function deploy(ref: string, source: string) {
+/** Is the running server busy? Unreachable counts as idle: then nothing is running to interrupt. */
+async function activeRuns(): Promise<number> {
+  try {
+    return ((await call("/status")) as { active?: unknown[] }).active?.length ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Stops new dispatches and waits for running ones to finish. False (and resumed) on timeout. */
+async function drain(timeoutMs: number): Promise<boolean> {
+  await call("/pause", { method: "POST" }).catch(() => undefined);
+  const end = Date.now() + timeoutMs;
+  let reported = -1;
+  for (;;) {
+    const n = await activeRuns();
+    if (n === 0) return true;
+    if (n !== reported) log(`→ waiting for ${n} running agent${n === 1 ? "" : "s"} to finish (dispatching is paused)`);
+    reported = n;
+    if (Date.now() > end) {
+      await call("/resume", { method: "POST" }).catch(() => undefined);
+      return false;
+    }
+    await new Promise((r) => setTimeout(r, 10_000));
+  }
+}
+
+async function deploy(ref: string, source: string, whenIdle = false) {
+  log(`== deploy ${ref} from ${source} at ${new Date().toISOString()}`);
   const tag = await buildRelease(config.home, source, ref, log);
   const before = readState(config.home);
+  // A first deploy replaces a hand-made service definition; keep it to restore on failure.
+  const restoreOriginalService = before.current ? undefined : await snapshotService(config.home);
+  if (whenIdle && !(await drain(2 * 60 * 60_000))) {
+    log(`✗ agents still running after 2 hours; ${tag} is built but not switched to. Dispatching resumed.`);
+    process.exitCode = 1;
+    return;
+  }
   let switched = false;
   let backup: string | undefined;
   try {
@@ -58,7 +93,7 @@ async function deploy(ref: string, source: string) {
     await uninstallService(config.home);
     if (!(await waitStopped(config.port))) throw new Error("the old server did not stop within 30s");
     backup = backupDatabase(config.home);
-    activate(config.home, tag, "deploy");
+    activate(config.home, tag, "deploy", source);
     switched = true;
     await installService(config.home);
     log(`→ waiting for ${tag} to become healthy`);
@@ -78,6 +113,9 @@ async function deploy(ref: string, source: string) {
     if (switched) activate(config.home, before.current, "rollback");
     await installService(config.home);
     log((await waitHealthy(config.port)) ? `✓ running ${before.current} again` : `✗ previous release did not come up; check ${config.home}/logs/main.log`);
+  } else if (restoreOriginalService) {
+    await restoreOriginalService();
+    log((await waitHealthy(config.port)) ? "✓ running the original service again" : "✗ the original service did not come up; check its log");
   }
   process.exitCode = 1;
 }
@@ -96,9 +134,11 @@ const help = `temper <command>
 
   open                           open the console in your browser, signed in as the board
   serve                          run the server in the foreground (development)
-  deploy [--ref main] [--source DIR]  build, verify and switch the service to a release
+  deploy [--ref main] [--source DIR] [--when-idle]
+                                 build, verify and switch the service to a release; --when-idle
+                                 pauses dispatching and waits for running agents before switching
   rollback                       switch back to the previous release
-  start | stop                   install/uninstall the launchd service for the current release
+  start | stop                   install/uninstall the service (launchd or systemd) for the current release
   status                         service, release and factory status
   pause | resume                 stop/start dispatching new work
   project add --name N --repo PATH [--remote URL] [--holdouts PATH (default: ~/.temper/holdouts/N)] [--setup CMD] [--test CMD] [--app CMD] [--health PATH] [--holdouts-cmd CMD] [--holdouts-setup CMD]
@@ -123,8 +163,18 @@ switch (command) {
     await import("./main.ts");
     break;
   case "deploy": {
-    const { values } = parseArgs({ args: rest, options: { ref: { type: "string", default: "main" }, source: { type: "string", default: config.appRoot } } });
-    await deploy(values.ref!, resolve(values.source!));
+    const { values } = parseArgs({
+      args: rest,
+      options: { ref: { type: "string", default: "main" }, source: { type: "string", default: config.appRoot }, "when-idle": { type: "boolean", default: false } },
+    });
+    try {
+      await deploy(values.ref!, resolve(values.source!), values["when-idle"]);
+    } catch (err) {
+      log(`✗ ${(err as Error).message}`);
+      process.exitCode = 1;
+    }
+    // The console reads this line to know the update is over (updates.ts).
+    log(`== done: ${process.exitCode ? "failed" : "ok"}`);
     break;
   }
   case "rollback":
@@ -141,7 +191,7 @@ switch (command) {
     break;
   case "status": {
     const state = readState(config.home);
-    log(`service: ${(await serviceInstalled(config.home)) ? "installed" : "not installed"}`);
+    log(`service: ${serviceKind()} ${(await serviceInstalled(config.home)) ? "running" : "not running"}`);
     log(`release: ${state.current ?? "none"} (previous: ${state.previous ?? "none"})`);
     try {
       log(JSON.stringify(await call("/status"), null, 2));

@@ -1,5 +1,5 @@
 import { queryOptions, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { api, patch, post, put } from "./api";
+import { api, ApiError, patch, post, put } from "./api";
 import type { ProviderInfo } from "./providers";
 import type {
   Agent,
@@ -31,6 +31,7 @@ import type {
   ProviderCaps,
   ToolsInventory,
   UsageReport,
+  UpdateStatus,
 } from "./types";
 
 /** Query key roots. Live updates invalidate by root. */
@@ -197,6 +198,26 @@ export const useIntakeSearch = () =>
 /** One issue per request: the Chief takes a minute or so on each, and a batch would outlast one HTTP request. */
 export const importIssue = (input: { projectId: string; source: IntakeSourceId; key: string; start: boolean; anyAuthor: boolean }) =>
   post<IntakeImportResult>("/intake/import", input);
+
+/** Null when the server does not check for updates (dev and preview instances). */
+export const updateQuery = (applying: boolean) =>
+  queryOptions({
+    queryKey: ["update"],
+    queryFn: () => api<UpdateStatus>("/update").catch((e: unknown) => (e instanceof ApiError && e.status === 404 ? null : Promise.reject(e))),
+    // While an update runs the server restarts; poll so the console notices the new version.
+    refetchInterval: applying ? 3_000 : 5 * 60_000,
+    retry: applying ? true : 1,
+  });
+export const updateLogQuery = (enabled: boolean) =>
+  queryOptions({ queryKey: ["update", "log"], queryFn: () => api<{ log: string }>("/update/log").then((r) => r.log), enabled, refetchInterval: 3_000 });
+export const useCheckUpdate = () => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: () => post<UpdateStatus>("/update/check"), onSuccess: (s) => qc.setQueryData(["update"], s) });
+};
+export const useApplyUpdate = () => {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: () => post<UpdateStatus>("/update/apply"), onSuccess: (s) => qc.setQueryData(["update"], s) });
+};
 
 export const useStartTicket = () => useInvalidating((id: string) => post<Ticket>(`/tickets/${encodeURIComponent(id)}/start`), [keys.tickets, ["ticket"]]);
 

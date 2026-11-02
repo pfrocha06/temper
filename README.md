@@ -145,7 +145,7 @@ cat > ~/.temper/profile.json <<'JSON'
 JSON
 
 # 2. Build, verify and start a release (console on http://127.0.0.1:4600), then sign in as the board
-temper deploy        # macOS; on Linux and Windows run `temper serve` instead
+temper deploy        # macOS (launchd) and Linux with systemd; on Windows run `temper serve` instead
 temper open
 
 # 3. Register a project. Temper creates its holdouts folder, ~/.temper/holdouts/myapp
@@ -163,6 +163,17 @@ temper import-spec --project <id> --file spec.md --start
 ```
 
 `temper rollback` returns to the previous release and `temper pause` stops new work.
+
+**Updates.** The main instance fetches its checkout's `origin` every 30 minutes. When `main` has
+new commits, the console's top bar shows **Update · N** with the list of commits. **Update now**
+runs `temper deploy --when-idle` outside the service:
+
+1. Builds the new commit and runs the full check, while Temper keeps working.
+2. Pauses new dispatches and waits for running agents to finish.
+3. Backs up the database and switches over.
+4. Rolls back if the new release fails its health check.
+
+The log is in `~/.temper/logs/update.log`. Set `TEMPER_UPDATE_CHECK=0` to turn checks off.
 `temper help` lists every command.
 
 ### Work intake
