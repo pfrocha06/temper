@@ -6,11 +6,11 @@ import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { srtAvailable } from "./helpers/srt.ts";
 import type { ExecResult } from "../src/exec.ts";
 import { gateScratchRoot, type Sandbox } from "../src/sandbox.ts";
 import { runSetupCommand, runSetupOnce, setupKey } from "../src/setup.ts";
 
-const srtAvailable = process.platform === "darwin" || process.env.TEMPER_TEST_SRT === "1";
 const done = (code: number | null, timedOut = false): ExecResult => ({ code, stdout: "", stderr: "", timedOut });
 
 describe("runSetupOnce", () => {

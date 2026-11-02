@@ -95,6 +95,8 @@ export type FactoryOptions = {
   profile?: Profile;
   /** The account an adapter's CLI is signed in as (email), for profiles that pin one. */
   accountOf?: (adapter: string) => Promise<string | undefined>;
+  /** Replaces the gate isolation probe (tests: a sandbox that fails it). */
+  probeGate?: () => Promise<GateProbeResult>;
 };
 
 const ACCOUNT_CHECK_MS = 5 * 60_000;
@@ -330,7 +332,7 @@ export class Factory extends EventEmitter {
   }
 
   private async probeGateSandbox(): Promise<GateProbeResult> {
-    const probe = await probeGateIsolation({ mode: this.config.gateSandbox, denyRead: [], allowRead: this.config.gateAllowRead }, protectedDirs(this.config), `http://127.0.0.1:${this.config.port}`).catch(
+    const probe = await (this.options.probeGate ?? (() => probeGateIsolation({ mode: this.config.gateSandbox, denyRead: [], allowRead: this.config.gateAllowRead }, protectedDirs(this.config), `http://127.0.0.1:${this.config.port}`)))().catch(
       (err): GateProbeResult => ({ isolated: false, problems: [`the probe crashed: ${(err as Error).message}`], output: "" }),
     );
     await audit(this.db, { actor: "system", kind: probe.isolated ? "gate_sandbox.verified" : "gate_sandbox.failed", data: { problems: probe.problems } });

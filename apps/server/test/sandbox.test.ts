@@ -4,6 +4,7 @@ import { connect, createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { srtAvailable } from "./helpers/srt.ts";
 import { bootApp, freePort } from "../src/app-runner.ts";
 import { runSandboxed } from "../src/exec.ts";
 import { probeGateIsolation } from "../src/probe.ts";
@@ -15,8 +16,6 @@ afterEach(() => {
   Object.assign(process.env, saved);
 });
 
-// srt needs sandbox-exec (macOS), bubblewrap + socat + ripgrep (Linux) or `srt windows-install` (Windows).
-const srtAvailable = process.platform === "darwin" || process.env.TEMPER_TEST_SRT === "1";
 const SRT: Sandbox = { mode: "srt", denyRead: [] };
 const OFF: Sandbox = { mode: "off", denyRead: [] };
 

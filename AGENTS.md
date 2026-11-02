@@ -57,6 +57,10 @@ If `pnpm` is not on PATH (Git Bash on Windows, for example), use `corepack pnpm`
 
 ## Changes that need extra care
 
+Anything that runs code Temper does not control goes through the sandbox and is listed in
+[docs/security/execution-boundaries.md](docs/security/execution-boundaries.md); run
+`pnpm test:security` (it needs the real sandbox).
+
 Changes to the agent adapters, the sandbox, the Verifier and holdouts, the gates and diff guard, or
 board auth and agent capabilities protect the separation of powers. Read the matching ADR first,
 re-run `temper probe-isolation --holdouts <folder>` for adapter or sandbox changes, and say so in
