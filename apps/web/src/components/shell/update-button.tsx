@@ -49,14 +49,14 @@ export function UpdateButton() {
 
   if (!s || phase === "current") return null;
   const label =
-    phase === "available" ? `Update · ${s.behind}` : phase === "applying" ? "Updating…" : phase === "failed" ? "Update failed" : "Updated · reload";
+    phase === "available" ? (s.channel === "releases" && s.latestVersion ? `Update to ${s.latestVersion}` : `Update · ${s.behind}`) : phase === "applying" ? "Updating…" : phase === "failed" ? "Update failed" : "Updated · reload";
   return (
     <>
       <Button
         size="sm"
         variant={phase === "failed" ? "destructive" : phase === "available" ? "default" : "outline"}
         onClick={() => (phase === "done" ? (writeTarget(null), location.reload()) : setOpen(true))}
-        aria-label={phase === "available" ? `${s.behind} new commits on ${s.branch}. Open update` : label}
+        aria-label={phase === "available" ? `${s.latestVersion ?? `${s.behind} new commits`} available. Open update` : label}
       >
         {phase === "applying" ? (
           <Spinner data-icon="inline-start" />
@@ -122,11 +122,12 @@ function UpdateDialog({
         <DialogHeader>
           <DialogTitle>{phase === "failed" ? "Update failed" : phase === "applying" ? "Updating Temper" : "Update Temper"}</DialogTitle>
           <DialogDescription>
-            Running <span className="font-mono">{s.current.slice(0, 7)}</span>
-            {s.latest ? (
+            Running <span className="font-mono">{s.version || s.current.slice(0, 7)}</span>
+            {s.latestVersion ? (
               <>
                 {" "}
-                · <span className="font-mono">origin/{s.branch}</span> is at <span className="font-mono">{s.latest.slice(0, 7)}</span>
+                → <span className="font-mono">{s.latestVersion}</span>
+                {s.channel === "main" ? <span className="text-muted-foreground"> (head of {s.branch})</span> : null}
               </>
             ) : null}
             {s.checkedAt ? <span className="text-muted-foreground"> · checked {new Date(s.checkedAt).toLocaleTimeString()}</span> : null}
@@ -136,9 +137,16 @@ function UpdateDialog({
         {phase === "available" ? (
           <>
             <div className="-mx-6 min-h-0 flex-1 overflow-y-auto border-y px-6 py-2">
-              <p className="mb-2 text-sm font-medium">
-                {s.behind} new commit{s.behind === 1 ? "" : "s"}
-                {s.behind > s.commits.length ? ` (newest ${s.commits.length} shown)` : ""}
+              <p className="mb-2 flex items-baseline gap-3 text-sm font-medium">
+                <span>
+                  {s.behind} new commit{s.behind === 1 ? "" : "s"}
+                  {s.behind > s.commits.length ? ` (newest ${s.commits.length} shown)` : ""}
+                </span>
+                {s.notesUrl ? (
+                  <a href={s.notesUrl} target="_blank" rel="noreferrer" className="text-xs font-normal text-primary underline-offset-2 hover:underline">
+                    Release notes
+                  </a>
+                ) : null}
               </p>
               <ul className="flex flex-col gap-1 text-sm">
                 {s.commits.map((c) => (

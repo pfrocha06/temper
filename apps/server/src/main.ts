@@ -22,7 +22,7 @@ const workflows = loadWorkflows(join(config.appRoot, "workflows"));
 const auth = new Auth(loadBoardToken(join(config.secretsDir, "board-token"), process.env.TEMPER_BOARD_TOKEN), config.port);
 const factory = new Factory(db, config, adapters, workflows, { auth, profile, accountOf: (a) => accountOf(config, a) });
 // The main instance looks for newer commits on its source's origin; dev and preview instances do not.
-const updater = new Updater({ home: config.home, appRoot: config.appRoot });
+const updater = new Updater({ home: config.home, appRoot: config.appRoot, channel: process.env.TEMPER_UPDATE_CHANNEL === "main" ? "main" : "releases" });
 const checkUpdates = (process.env.TEMPER_UPDATE_CHECK ?? (config.instance === "main" ? "1" : "0")) !== "0";
 if (checkUpdates) updater.start();
 const app = createApi(db, factory, config, { auth, profile, updater });

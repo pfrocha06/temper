@@ -172,8 +172,13 @@ export type IntakeImportResult = { key: string; url: string; status: "imported" 
 // Updates (the top bar's "Update available"); shape from apps/server/src/updates.ts.
 export type UpdateStatus = {
   current: string;
+  /** `git describe`: v0.2.0, or v0.2.0-3-gabc1234 between releases. */
+  version: string;
   branch: string;
+  channel: "releases" | "main";
   latest?: string;
+  latestVersion?: string;
+  notesUrl?: string;
   behind: number;
   commits: Array<{ sha: string; subject: string }>;
   diverged: boolean;

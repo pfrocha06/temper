@@ -35,7 +35,7 @@ describe("update check", () => {
   it("lists the commits on origin/main that the running checkout lacks, newest first", async () => {
     commit(upstream, "second");
     commit(upstream, "third");
-    const u = new Updater({ home, appRoot: app, service: "systemd" });
+    const u = new Updater({ home, appRoot: app, channel: "main", service: "systemd" });
     const s = await u.check();
     expect(s).toMatchObject({ current: first, behind: 2, diverged: false, latest: git(upstream, "rev-parse", "HEAD") });
     expect(s.commits.map((c) => c.subject)).toEqual(["third", "second"]);
@@ -44,18 +44,18 @@ describe("update check", () => {
   });
 
   it("is up to date when origin has nothing new", async () => {
-    expect(await new Updater({ home, appRoot: app }).check()).toMatchObject({ behind: 0, commits: [], diverged: false });
+    expect(await new Updater({ home, appRoot: app, channel: "main" }).check()).toMatchObject({ behind: 0, commits: [], diverged: false });
   });
 
   it("offers nothing for a local commit origin does not have", async () => {
     commit(app, "local only");
     commit(upstream, "second");
-    expect(await new Updater({ home, appRoot: app }).check()).toMatchObject({ diverged: true, behind: 0 });
+    expect(await new Updater({ home, appRoot: app, channel: "main" }).check()).toMatchObject({ diverged: true, behind: 0 });
   });
 
   it("reports a failed fetch instead of throwing", async () => {
     git(app, "remote", "set-url", "origin", join(root, "missing"));
-    const s = await new Updater({ home, appRoot: app }).check();
+    const s = await new Updater({ home, appRoot: app, channel: "main" }).check();
     expect(s.error).toMatch(/git fetch/);
   });
 
@@ -72,7 +72,7 @@ describe("applying an update", () => {
   it("starts deploy of origin's commit outside the service, once", async () => {
     const latest = commit(upstream, "second");
     const spawned: string[][] = [];
-    const u = new Updater({ home, appRoot: app, service: "systemd", spawn: async (args) => void spawned.push(args) });
+    const u = new Updater({ home, appRoot: app, channel: "main", service: "systemd", spawn: async (args) => void spawned.push(args) });
     await u.check();
     const s = await u.apply();
     expect(spawned).toHaveLength(1);
@@ -84,11 +84,11 @@ describe("applying an update", () => {
 
   it("refuses with nothing to apply, or no service to restart", async () => {
     const spawn = async () => {};
-    const upToDate = new Updater({ home, appRoot: app, service: "systemd", spawn });
+    const upToDate = new Updater({ home, appRoot: app, channel: "main", service: "systemd", spawn });
     await upToDate.check();
     await expect(upToDate.apply()).rejects.toThrow(/no update to apply/);
     commit(upstream, "second");
-    const noService = new Updater({ home, appRoot: app, service: "none", spawn });
+    const noService = new Updater({ home, appRoot: app, channel: "main", service: "none", spawn });
     await noService.check();
     await expect(noService.apply()).rejects.toThrow(/update by hand/);
   });
@@ -132,7 +132,7 @@ describe("update API", () => {
     const { loadConfig } = await import("../src/config.ts");
     const { db, close } = await openDb();
     try {
-      const updater = new Updater({ home, appRoot: app, service: "systemd", spawn: async () => {} });
+      const updater = new Updater({ home, appRoot: app, channel: "main", service: "systemd", spawn: async () => {} });
       const api = createApi(db, {} as never, loadConfig({ TEMPER_HOME: home }), { updater });
       expect(await (await api.request("/api/update/check", { method: "POST" })).json()).toMatchObject({ current: first, behind: 0 });
       expect((await api.request("/api/update/apply", { method: "POST" })).status).toBe(409);
@@ -156,5 +156,40 @@ describe("deployOutcome", () => {
     expect(deployOutcome("== deploy a\n✗ check failed\n== done: failed\n")).toBe("failed");
     expect(deployOutcome("== deploy a\n== done: failed\n== deploy b\n✓ deployed b\n== done: ok\n")).toBe("ok");
     expect(deployOutcome("== deploy a\n== done: ok\n== deploy b\n→ clone\n")).toBeUndefined();
+  });
+});
+
+describe("releases channel", () => {
+  const tag = (repo: string, name: string) => git(repo, "tag", name);
+
+  it("offers nothing until there is a release", async () => {
+    commit(upstream, "second");
+    const s = await new Updater({ home, appRoot: app }).check();
+    expect(s).toMatchObject({ channel: "releases", behind: 0, diverged: false });
+    expect(s.latest).toBeUndefined();
+    expect(s.version).toBe(first.slice(0, 7));
+  });
+
+  it("targets the newest vX.Y.Z tag on main, by version order, not the head", async () => {
+    commit(upstream, "second");
+    tag(upstream, "v0.9.0");
+    const v010 = commit(upstream, "third");
+    tag(upstream, "v0.10.0");
+    tag(upstream, "v0.11.0-rc.1"); // not a release
+    commit(upstream, "unreleased");
+    const s = await new Updater({ home, appRoot: app }).check();
+    expect(s).toMatchObject({ latest: v010, latestVersion: "v0.10.0", behind: 2, diverged: false });
+    expect(s.commits.map((c) => c.subject)).toEqual(["third", "second"]);
+  });
+
+  it("is current when running the release, and when running main past it", async () => {
+    tag(upstream, "v0.1.0");
+    git(app, "fetch", "-q", "--tags");
+    expect(await new Updater({ home, appRoot: app }).check()).toMatchObject({ version: "v0.1.0", behind: 0, diverged: false });
+    commit(upstream, "after the release");
+    git(app, "pull", "-q");
+    const ahead = await new Updater({ home, appRoot: app }).check();
+    expect(ahead).toMatchObject({ behind: 0, diverged: false, latestVersion: "v0.1.0" });
+    expect(ahead.version).toMatch(/^v0\.1\.0-1-g[0-9a-f]{7}$/);
   });
 });
