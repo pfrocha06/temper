@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { BookOpenIcon, BookPlusIcon, FileInputIcon, FolderPlusIcon, MessageSquareIcon, MessageSquarePlusIcon, PauseIcon, PlayIcon, PlusIcon } from "lucide-react";
+import { BookOpenIcon, BookPlusIcon, FileInputIcon, FolderPlusIcon, ListPlusIcon, MessageSquareIcon, MessageSquarePlusIcon, PauseIcon, PlayIcon, PlusIcon } from "lucide-react";
 import { useEffect } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -62,6 +62,11 @@ export function CommandPalette() {
               <PlusIcon />
               New ticket
               <CommandShortcut>N</CommandShortcut>
+            </CommandItem>
+            <CommandItem disabled={!project} value="import issues github jira tracker epic jql" onSelect={run(() => show("import-issues"))}>
+              <ListPlusIcon />
+              Import issues from GitHub or Jira
+              <CommandShortcut>E</CommandShortcut>
             </CommandItem>
             <CommandItem disabled={!project} onSelect={run(() => show("import-spec"))}>
               <FileInputIcon />

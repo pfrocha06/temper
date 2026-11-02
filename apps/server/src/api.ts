@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { serveStatic } from "@hono/node-server/serve-static";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import {
@@ -51,6 +51,8 @@ import { BOARD_COOKIE, type Auth } from "./auth.ts";
 import { createHealth } from "./health.ts";
 import { GithubImportError, importFromGithub } from "./github-import.ts";
 import { importFromJira, JiraImportError } from "./jira-import.ts";
+import { githubFilters, importOne, IntakeError, intakeSources, jiraFilters, searchIntake, type IntakeDeps } from "./intake.ts";
+import { JiraError } from "../../../plugins/jira/src/index.ts";
 import { loadProfile, type Profile } from "./profile.ts";
 import { listProviders } from "./providers.ts";
 import { inventory } from "./tools.ts";
@@ -96,7 +98,7 @@ const AgentEdit = z.object({
   instructions: z.string(),
 });
 
-export function createApi(db: Db, factory: Factory, config: Config, opts: { uptime?: () => number; auth?: Auth; profile?: Profile } = {}): Hono {
+export function createApi(db: Db, factory: Factory, config: Config, opts: { uptime?: () => number; auth?: Auth; profile?: Profile; intake?: Pick<IntakeDeps, "issues" | "repoFilters" | "fetchFn"> } = {}): Hono {
   const app = new Hono();
   const health = createHealth(config, opts.uptime);
   const auth = opts.auth;
@@ -208,6 +210,68 @@ export function createApi(db: Db, factory: Factory, config: Config, opts: { upti
       if (e instanceof GithubImportError) return c.json({ error: e.message }, 400);
       throw e;
     }
+  });
+
+  // The console's issue picker: sources, filters, a search that imports nothing, one-issue imports.
+  const intakeDeps = (): IntakeDeps => ({
+    db,
+    profile: opts.profile ?? loadProfile(config.home),
+    secretsDir: config.secretsDir,
+    importSpec: (pid, title, md, start) => factory.importSpec(pid, title, md, start),
+    tick: () => factory.tick(),
+    ...opts.intake,
+  });
+  const intake = async (c: Context, run: () => Promise<unknown>, status: 200 | 201 = 200) => {
+    try {
+      return c.json(await run(), status);
+    } catch (e) {
+      if (e instanceof IntakeError || e instanceof GithubImportError || e instanceof JiraImportError || e instanceof z.ZodError) {
+        return c.json({ error: e instanceof z.ZodError ? e.issues.map((i) => i.message).join("; ") : e.message }, 400);
+      }
+      // The tracker refused or could not be reached: say so instead of a bare 500.
+      if (e instanceof JiraError) return c.json({ error: e.message }, 502);
+      const stderr = (e as { stderr?: string }).stderr?.trim();
+      if (stderr) return c.json({ error: `gh: ${stderr.split("\n")[0]}` }, 502);
+      throw e;
+    }
+  };
+  const IntakeQueryBody = z.discriminatedUnion("source", [
+    z.object({
+      source: z.literal("github"),
+      projectId: z.string(),
+      query: z.string().max(500).optional(),
+      labels: z.array(z.string().max(100)).max(20).optional(),
+      milestone: z.string().max(200).optional(),
+      limit: z.number().int().min(1).max(100).optional(),
+    }),
+    z.object({
+      source: z.literal("jira"),
+      projectId: z.string(),
+      jql: z.string().max(2000).optional(),
+      project: z.string().max(50).optional(),
+      epic: z.string().max(64).optional(),
+      text: z.string().max(500).optional(),
+      includeDone: z.boolean().optional(),
+      limit: z.number().int().min(1).max(100).optional(),
+    }),
+  ]);
+  app.get("/api/intake/sources", (c) => intake(c, () => intakeSources(intakeDeps(), c.req.query("projectId") ?? "")));
+  app.get("/api/intake/github/filters", (c) => intake(c, () => githubFilters(intakeDeps(), c.req.query("projectId") ?? "")));
+  app.get("/api/intake/jira/filters", (c) => intake(c, () => jiraFilters(intakeDeps(), c.req.query("project") || undefined)));
+  app.post("/api/intake/search", async (c) => {
+    const body = await c.req.json();
+    return intake(c, async () => ({ candidates: await searchIntake(intakeDeps(), IntakeQueryBody.parse(body)) }));
+  });
+  app.post("/api/intake/import", async (c) => {
+    const body = await c.req.json();
+    const Input = z.object({
+      projectId: z.string(),
+      source: z.enum(["github", "jira"]),
+      key: z.string().min(1).max(200),
+      start: z.boolean().default(false),
+      anyAuthor: z.boolean().default(false),
+    });
+    return intake(c, () => importOne(intakeDeps(), Input.parse(body)), 201);
   });
 
   app.get("/api/dispatches", async (c) => c.json(await recentDispatches(db, Number(c.req.query("limit") ?? 50))));

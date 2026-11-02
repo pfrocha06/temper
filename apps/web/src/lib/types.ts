@@ -142,3 +142,29 @@ export type UsageReport = Json<UsageReportRow>;
 export type TicketUsage = UsageReport["byTicket"][number];
 
 export type { UsageBucket, Contribution, KnowledgeKind, ModelUsage, ProviderCaps, UsageWindow, Regime, RegimePolicy, Role, RunEvent, TicketStatus, TicketType };
+
+// Issue intake (the board's "Import issues" picker); shapes from apps/server/src/intake.ts.
+export type IntakeSourceId = "github" | "jira";
+export type IntakeSources = {
+  github: { available: true; repo: string } | { available: false; reason: string };
+  jira: { available: true; baseUrl: string } | { available: false; reason: string };
+};
+export type GithubFilters = { labels: Array<{ name: string; color: string; description: string }>; milestones: Array<{ number: number; title: string }> };
+export type JiraFilters = { projects: Array<{ key: string; name: string }>; epics: Array<{ key: string; summary: string }> };
+export type GithubIntakeQuery = { source: "github"; query?: string; labels?: string[]; milestone?: string };
+export type JiraIntakeQuery = { source: "jira"; jql?: string; project?: string; epic?: string; text?: string; includeDone?: boolean };
+export type IntakeQuery = (GithubIntakeQuery | JiraIntakeQuery) & { projectId: string; limit?: number };
+export type IntakeCandidate = {
+  source: IntakeSourceId;
+  key: string;
+  title: string;
+  url: string;
+  status: string;
+  labels: string[];
+  type?: string;
+  parent?: { key: string; summary: string };
+  author?: string;
+  trusted: boolean;
+  ticketId?: string;
+};
+export type IntakeImportResult = { key: string; url: string; status: "imported" | "skipped"; ticketIds: string[]; reason?: string; existingTicketId?: string };

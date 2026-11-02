@@ -34,9 +34,20 @@ export type JiraIssue = {
   issueType: string;
   project: string;
   labels: string[];
+  /** The epic or parent issue, when it has one. */
+  parent?: { key: string; summary: string };
 };
 
 export type JiraTransition = { id: string; name: string; to?: string };
+
+export type JiraProject = { key: string; name: string };
+
+/** A JQL string literal: anything the board types stays a value, never more JQL. */
+export const jqlString = (s: string) => `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/[\r\n]+/g, " ")}"`;
+
+/** Issue keys and project keys as Jira shapes them (`ABC`, `ABC-12`). */
+export const JIRA_PROJECT_KEY = /^[A-Z][A-Z0-9_]{0,49}$/;
+export const JIRA_ISSUE_KEY = /^[A-Z][A-Z0-9_]{0,49}-\d{1,9}$/;
 
 export type TransitionResult = { ok: true; transition: JiraTransition } | { ok: false; reason: "transition not available"; name: string; available: string[] };
 
@@ -115,13 +126,20 @@ export class JiraClient {
       issueType: f.issuetype?.name ?? "",
       project: f.project?.key ?? String(raw.key).split("-")[0],
       labels: f.labels ?? [],
+      ...(f.parent?.key ? { parent: { key: String(f.parent.key), summary: String(f.parent.fields?.summary ?? "") } } : {}),
     };
   }
 
   async search(jql: string, maxResults = 50): Promise<JiraIssue[]> {
-    const fields = "summary,description,status,issuetype,project,labels";
+    const fields = "summary,description,status,issuetype,project,labels,parent";
     const res = await this.call("GET", `/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&maxResults=${maxResults}&fields=${fields}`);
     return ((res?.issues ?? []) as Json[]).map((i) => this.toIssue(i));
+  }
+
+  /** Projects the account can browse, by key. */
+  async listProjects(maxResults = 100): Promise<JiraProject[]> {
+    const res = await this.call("GET", `/rest/api/3/project/search?maxResults=${maxResults}&orderBy=key`);
+    return ((res?.values ?? []) as Json[]).map((p) => ({ key: String(p.key), name: String(p.name ?? p.key) }));
   }
 
   async getIssue(key: string): Promise<JiraIssue> {

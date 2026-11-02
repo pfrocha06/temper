@@ -182,6 +182,12 @@ skipped, and the PR says `Closes owner/name#42`, so merging closes the issue. On
 repository anyone can open an issue, and its text becomes instructions for your agents: only issues
 by people who can push to the repository are imported, unless you read one and pass `--any-author`.
 
+In the console, **Board › Import issues** (or `E`) does the same with pickers: choose GitHub or
+Jira, filter (GitHub: search, labels, milestone; Jira: project, epic, text, or raw JQL), fetch, tick
+the issues you want and import. Fetching imports nothing, and each ticked issue is imported in its
+own request, so a long batch shows progress per issue and can be stopped. The CLI's `--search` and
+`--jql` work the same way.
+
 Temper works on its own roadmap the same way: register this repository as a project, then
 `temper import-github --project <id> --search "label:roadmap"`.
 

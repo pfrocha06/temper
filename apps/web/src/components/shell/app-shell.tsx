@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { Outlet, useNavigate } from "react-router";
 import { CommandPalette } from "@/components/command-palette";
 import { RowsSkeleton } from "@/components/query-state";
+import { ImportIssuesDialog } from "@/features/board/import-issues-dialog";
 import { ImportSpecDialog } from "@/features/board/import-spec-dialog";
 import { NewTicketDialog } from "@/features/board/new-ticket-dialog";
 import { EntryDialog } from "@/features/knowledge/entry-dialog";
@@ -30,6 +31,7 @@ function Shell() {
     ...Object.fromEntries([...NAV, SETTINGS].map((n) => [`g ${n.key}`, () => navigate(n.to)])),
     n: () => project && actions.show("new-ticket"),
     i: () => project && actions.show("import-spec"),
+    e: () => project && actions.show("import-issues"),
   });
 
   return (
@@ -62,6 +64,7 @@ function Shell() {
         <>
           <NewTicketDialog projectId={project.id} open={actions.open === "new-ticket"} onOpenChange={(o) => actions.setOpen("new-ticket", o)} />
           <ImportSpecDialog projectId={project.id} open={actions.open === "import-spec"} onOpenChange={(o) => actions.setOpen("import-spec", o)} />
+          <ImportIssuesDialog projectId={project.id} open={actions.open === "import-issues"} onOpenChange={(o) => actions.setOpen("import-issues", o)} />
         </>
       ) : null}
     </div>

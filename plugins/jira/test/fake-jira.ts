@@ -71,6 +71,10 @@ export async function startFakeJira(opts: FakeJiraOptions = {}): Promise<FakeJir
         const found = [...issues.values()].filter((i) => (key ? i.key === key : project ? i.key.startsWith(project + "-") : true));
         return send(200, { issues: found.map(render), isLast: true });
       }
+      if (method === "GET" && path === "/rest/api/3/project/search") {
+        const keys = [...new Set([...issues.keys()].map((k) => k.split("-")[0]!))].sort();
+        return send(200, { values: keys.map((key) => ({ key, name: `Project ${key}` })), isLast: true });
+      }
       if (method === "POST" && path === "/rest/api/3/issue") {
         const f = body.fields;
         const project = f.project.key as string;
