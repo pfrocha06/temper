@@ -151,6 +151,24 @@ describe("run", () => {
     expect(events.map((e) => e.kind)).toEqual(["init", "tool_use", "tool_result", "text", "text", "usage", "result"]);
   });
 
+  // SEC-03 (#38): canaries in the server's environment never reach Codex or what it starts.
+  it("passes the run's variables and never the server's secrets", async () => {
+    const fake = join(import.meta.dirname, "fixtures", "fake-codex.mjs");
+    const codexHome = mkdtempSync(join(tmpdir(), "cx-home-"));
+    writeFileSync(join(codexHome, "auth.json"), "{}");
+    const canaries = { GH_TOKEN: "canary-gh", TEMPER_BOARD_TOKEN: "canary-board", OPENAI_API_KEY: "canary-openai" };
+    Object.assign(process.env, canaries);
+    try {
+      const events: RunEvent[] = [];
+      const adapter = createCodexCliAdapter({ bin: process.execPath, binArgs: [fake], codexHome, userSkillsDir: join(tmpdir(), "none") });
+      await adapter.run({ ...base, cwd: tmpdir(), prompt: "x" }, (e) => events.push(e));
+      const echoed = JSON.parse((events.find((e) => e.kind === "text") as { text: string }).text);
+      expect(echoed).toMatchObject({ home: codexHome, leaked: [], childLeaked: [] });
+    } finally {
+      for (const k of Object.keys(canaries)) delete process.env[k];
+    }
+  });
+
   it("refuses to run before Temper's Codex login exists", async () => {
     const adapter = createCodexCliAdapter({ bin: process.execPath, codexHome: join(tmpdir(), "no-such-codex-home") });
     await expect(adapter.run(base, () => {})).rejects.toThrow(/temper codex login/);

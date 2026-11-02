@@ -9,8 +9,8 @@ import { claudeAccount } from "./providers.ts";
 export function createAdapters(config: Config, profile: Profile): Map<string, AgentAdapter> {
   const alwaysDenyDirs = protectedDirs(config);
   const adapters = new Map<string, AgentAdapter>();
-  if (profile.adapters.includes("claude-cli")) adapters.set("claude-cli", createClaudeCliAdapter({ bin: config.claudeBin, alwaysDenyDirs }));
-  if (profile.adapters.includes("codex-cli")) adapters.set("codex-cli", createCodexCliAdapter({ bin: config.codexBin, codexHome: config.codexHome, alwaysDenyDirs }));
+  if (profile.adapters.includes("claude-cli")) adapters.set("claude-cli", createClaudeCliAdapter({ bin: config.claudeBin, alwaysDenyDirs, passEnv: config.agentEnv }));
+  if (profile.adapters.includes("codex-cli")) adapters.set("codex-cli", createCodexCliAdapter({ bin: config.codexBin, codexHome: config.codexHome, alwaysDenyDirs, passEnv: config.agentEnv }));
   return adapters;
 }
 
