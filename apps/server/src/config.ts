@@ -18,6 +18,12 @@ export type Config = {
   codexBin: string;
   /** Temper's own CODEX_HOME (only the Codex login lives there); inside secrets, so no agent can read it. */
   codexHome: string;
+  /**
+   * Where projects' holdouts live unless the board names a folder (TEMPER_HOLDOUTS_ROOT). On Windows
+   * the gate runs holdouts as srt's sandbox account, which cannot read inside the user's profile,
+   * so they live under %ProgramData%	emper there; the Builder's code is denied them everywhere.
+   */
+  holdoutsRoot: string;
   /** Board token file (mode 0600). Agents are always denied this directory. */
   secretsDir: string;
   /** Sandbox for Builder code the server runs itself (tests, the candidate app). `off` only for development. */
@@ -47,6 +53,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     codexBin: env.TEMPER_CODEX_BIN ?? "codex",
     codexHome: env.TEMPER_CODEX_HOME ?? join(home, "secrets", "codex"),
     secretsDir: join(home, "secrets"),
+    holdoutsRoot: env.TEMPER_HOLDOUTS_ROOT ?? (process.platform === "win32" ? join(windowsGateRoot(), "holdouts") : join(home, "holdouts")),
     gateSandbox: env.TEMPER_GATE_SANDBOX === "off" ? "off" : "srt",
     gateAllowRead: (env.TEMPER_GATE_ALLOW_READ ?? "").split(delimiter).filter(Boolean),
   };

@@ -77,6 +77,9 @@ Changes must keep these. Each has an ADR; changing one needs a new ADR.
   server reads them.
 - **The Builder never sees the holdouts** (ADR 0001). Holdouts live in a separate repository the
   Builder's sandbox cannot read, and the prompt never includes the Verifier's artifacts.
+- **Untrusted code runs only in the sandbox.** The Builder's tests and app, and the Verifier's
+  holdouts, run through srt with their own policies (`sandboxed` in `apps/server/src/sandbox.ts`);
+  a sandbox that is missing or fails its probe fails the stage, never falls back to the host.
 - **Agents act through capabilities** (ADR 0007). The board has the board token; an agent run gets
   a capability scoped to its dispatch or chat and role, and the server checks it on every call.
 - **Audit events are append-only.** Never updated or deleted.
