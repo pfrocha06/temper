@@ -6,7 +6,8 @@ reproduction, fixes, and work on the items in the [roadmap](https://github.com/p
 ## Before you start
 
 1. Read [CONTEXT.md](CONTEXT.md). Use its words exactly: ticket, stage, dispatch, verdict, holdout, gate.
-2. Skim [docs/design.md](docs/design.md) and the [ADRs](docs/adr).
+2. Skim [ARCHITECTURE.md](ARCHITECTURE.md), [docs/design.md](docs/design.md) and the [ADRs](docs/adr).
+   Working with a coding agent? Point it at [AGENTS.md](AGENTS.md).
 3. For anything bigger than a small fix, open an issue first so we can agree on the approach.
    Roadmap items have a spec in [docs/specs](docs/specs) that names the files it touches, its
    acceptance criteria and what is out of scope.
