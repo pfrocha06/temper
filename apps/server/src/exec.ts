@@ -30,9 +30,9 @@ export function runShell(
 export async function runSandboxed(
   command: string,
   sandbox: Sandbox,
-  opts: { cwd: string; env?: Record<string, string>; timeoutMs?: number; signal?: AbortSignal; onOutput?: (chunk: string) => void; readOnlyCwd?: boolean; reach?: number; allowWrite?: string[] },
+  opts: { cwd: string; env?: Record<string, string>; timeoutMs?: number; signal?: AbortSignal; onOutput?: (chunk: string) => void; readOnlyCwd?: boolean; reach?: number; allowWrite?: string[]; domains?: string[] },
 ): Promise<ExecResult> {
-  const cmd = await sandboxed(sandbox, command, { cwd: opts.cwd, env: opts.env, readOnlyCwd: opts.readOnlyCwd, reach: opts.reach, allowWrite: opts.allowWrite });
+  const cmd = await sandboxed(sandbox, command, { cwd: opts.cwd, env: opts.env, readOnlyCwd: opts.readOnlyCwd, reach: opts.reach, allowWrite: opts.allowWrite, domains: opts.domains });
   try {
     return await runProcess(spawn(cmd.file, cmd.args, { cwd: opts.cwd, env: cmd.env, shell: cmd.shell, signal: opts.signal }), opts.timeoutMs, opts.onOutput);
   } finally {

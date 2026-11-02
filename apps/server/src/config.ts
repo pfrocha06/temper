@@ -2,6 +2,7 @@ import { homedir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { windowsGateRoot, type SandboxMode } from "./sandbox.ts";
+import { DEFAULT_SETUP_DOMAINS } from "./setup.ts";
 
 export type Config = {
   /** Root of all Temper state: releases, instances, worktrees. */
@@ -24,6 +25,8 @@ export type Config = {
    * so they live under %ProgramData%	emper there; the Builder's code is denied them everywhere.
    */
   holdoutsRoot: string;
+  /** Hosts setup commands may reach (TEMPER_SETUP_ALLOW_DOMAINS, comma-separated; default: public package registries). */
+  setupDomains: string[];
   /** Board token file (mode 0600). Agents are always denied this directory. */
   secretsDir: string;
   /** Sandbox for Builder code the server runs itself (tests, the candidate app). `off` only for development. */
@@ -53,6 +56,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     codexBin: env.TEMPER_CODEX_BIN ?? "codex",
     codexHome: env.TEMPER_CODEX_HOME ?? join(home, "secrets", "codex"),
     secretsDir: join(home, "secrets"),
+    setupDomains: env.TEMPER_SETUP_ALLOW_DOMAINS ? env.TEMPER_SETUP_ALLOW_DOMAINS.split(",").map((s) => s.trim()).filter(Boolean) : DEFAULT_SETUP_DOMAINS,
     holdoutsRoot: env.TEMPER_HOLDOUTS_ROOT ?? (process.platform === "win32" ? join(windowsGateRoot(), "holdouts") : join(home, "holdouts")),
     gateSandbox: env.TEMPER_GATE_SANDBOX === "off" ? "off" : "srt",
     gateAllowRead: (env.TEMPER_GATE_ALLOW_READ ?? "").split(delimiter).filter(Boolean),
