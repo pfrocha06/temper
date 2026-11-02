@@ -1,8 +1,8 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { createServer, type Server, type Socket } from "node:net";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
 /**
@@ -76,10 +76,51 @@ const srtCli = () => createRequire(import.meta.url).resolve("@anthropic-ai/sandb
  * - macOS shares the host's loopback (`allowLocalBinding`), so the host reaches the app directly.
  * - Windows blocks every direct connect, loopback included, so loopback goes through srt's proxy.
  * - Linux has its own network namespace: the only way out is srt's proxy, to the host's relay.
+ * `reach` is one port on the host's loopback the command may connect to through the proxy (the
+ * candidate app, for the holdouts). `domains` are hosts it may reach through the proxy (package
+ * registries, for setup commands).
  */
-export function srtNetwork(platform: NodeJS.Platform, relayPort?: number): Record<string, unknown> {
+export function srtNetwork(platform: NodeJS.Platform, relayPort?: number, reach?: number, domains: string[] = []): Record<string, unknown> {
   const allowedDomains = platform === "win32" ? ["localhost", "127.0.0.1"] : relayPort ? [`127.0.0.1:${relayPort}`] : [];
+  if (reach && platform !== "win32") allowedDomains.push(`127.0.0.1:${reach}`, `localhost:${reach}`);
+  allowedDomains.push(...domains);
   return { allowedDomains, deniedDomains: [], allowLocalBinding: true };
+}
+
+/**
+ * The `node_modules` folders of a checkout, up to three levels down (a pnpm or npm workspace's
+ * packages). Test tools keep their caches there (vite, vitest), so a command that must not change
+ * the checkout's source may still write them.
+ */
+export function nodeModulesDirs(root: string): string[] {
+  const found: string[] = [];
+  const walk = (dir: string, depth: number) => {
+    let entries: import("node:fs").Dirent[];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (!e.isDirectory() || e.name === ".git") continue;
+      if (e.name === "node_modules") found.push(join(dir, e.name));
+      else if (depth < 3 && !e.name.startsWith(".")) walk(join(dir, e.name), depth + 1);
+    }
+  };
+  walk(root, 0);
+  return found;
+}
+
+/**
+ * Credential folders in the user's home no command Temper sandboxes needs: SSH and GPG keys,
+ * cloud and git host logins, other agent CLIs' state. Only those that exist (srt can only mask a
+ * real path). Windows needs none: srt runs commands there as an account that cannot read the profile.
+ */
+export function personalSecretDirs(home = homedir(), platform: NodeJS.Platform = process.platform): string[] {
+  if (platform === "win32") return [];
+  return [".ssh", ".gnupg", ".aws", ".azure", ".kube", ".docker", ".config/gh", ".config/gcloud", ".claude", ".codex", ".netrc", ".git-credentials"]
+    .map((p) => join(home, p))
+    .filter((p) => existsSync(p));
 }
 
 /** The srt settings for one command: no outbound network, writes only to `allowWrite`. */
@@ -222,13 +263,14 @@ export async function hostRelay(token: string): Promise<{ relayPort: number; url
 
 /**
  * Prepares `command` (a shell command line) to run in `cwd` under the sandbox. The command may
- * write only `cwd`, a private temp dir (its TMPDIR) and `allowWrite`. With `expose`, the command
- * listens on that port inside the sandbox and the result's `url` reaches it from the host.
+ * write only `cwd` (unless `readOnlyCwd`), a private temp dir (its TMPDIR) and `allowWrite`. With
+ * `expose`, the command listens on that port inside the sandbox and the result's `url` reaches it
+ * from the host. With `reach`, it may connect to that port on the host's loopback (see srtNetwork).
  */
 export async function sandboxed(
   sandbox: Sandbox,
   command: string,
-  opts: { cwd: string; allowWrite?: string[]; env?: Record<string, string>; expose?: number },
+  opts: { cwd: string; allowWrite?: string[]; env?: Record<string, string>; expose?: number; readOnlyCwd?: boolean; reach?: number; domains?: string[] },
   platform: NodeJS.Platform = process.platform,
 ): Promise<SandboxedCommand> {
   const tmp = mkdtempSync(join(gateScratchRoot(), "temper-gate-tmp-"));
@@ -238,7 +280,8 @@ export async function sandboxed(
   }
   const token = randomBytes(24).toString("base64url");
   const relay = opts.expose && platform === "linux" ? await hostRelay(token) : undefined;
-  const extra: Record<string, string> = { ...opts.env, TMPDIR: tmp, TMP: tmp, TEMP: tmp };
+  // XDG_RUNTIME_DIR too: tools keep locks there (pnpm 12 its store locks), and the real one is read-only here.
+  const extra: Record<string, string> = { ...opts.env, TMPDIR: tmp, TMP: tmp, TEMP: tmp, ...(platform === "win32" ? {} : { XDG_RUNTIME_DIR: tmp }) };
   // Windows routes loopback through srt's proxy; Node's own HTTP client only uses it when told to.
   if (platform === "win32") extra.NODE_USE_ENV_PROXY = "1";
   const launch = join(tmp, "launch.json");
@@ -251,7 +294,7 @@ export async function sandboxed(
   // The settings live outside every writable path, so the command cannot rewrite its own policy.
   const settingsDir = mkdtempSync(join(tmpdir(), "temper-srt-"));
   const settings = join(settingsDir, "srt-settings.json");
-  writeFileSync(settings, JSON.stringify(srtSettings(sandbox, [opts.cwd, tmp, ...(opts.allowWrite ?? [])], srtNetwork(platform, relay?.relayPort))), { mode: 0o600 });
+  writeFileSync(settings, JSON.stringify(srtSettings(sandbox, [...(opts.readOnlyCwd ? [] : [opts.cwd]), tmp, ...(opts.allowWrite ?? [])], srtNetwork(platform, relay?.relayPort, opts.reach, opts.domains))), { mode: 0o600 });
   const q = (s: string) => `"${s}"`;
   return {
     file: process.execPath,

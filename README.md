@@ -273,7 +273,7 @@ Three ways to add checks:
 | | macOS | Linux | Windows |
 |---|:---:|:---:|:---:|
 | Server, console and CLI | ✅ | ✅ | ✅ |
-| Gate sandbox (Builder tests, candidate app) | ✅ built in | ✅ `bubblewrap`, `socat`, `ripgrep` ¹ | ✅ alpha, one-time setup ² |
+| Gate sandbox (setup, Builder tests, candidate app, holdouts) | ✅ built in | ✅ `bubblewrap`, `socat`, `ripgrep` ¹ | ✅ alpha, one-time setup ² |
 | Background service (`temper start`) | ✅ launchd | run `temper serve` under your own service manager | run `temper serve` under your own service manager |
 | Agent runs sandboxed (by the `claude` CLI) | ✅ | ✅ | check with `probe-isolation` |
 | Agent runs sandboxed (by the `codex` CLI) | ✅ | ✅ | ✅ needs `temper codex setup`; no network, so keep the Verifier on Claude |
@@ -286,8 +286,13 @@ tells you when.
 
 ² The installer runs `srt windows-install` (one UAC prompt); from a checkout, run
 `pnpm --filter @temper/server exec srt windows-install`. It creates a dedicated `srt-sandbox` account and firewall rules for it; `windows-uninstall` removes them. That
-account can't see inside your user profile, so on Windows worktrees and gate scratch files live
-under `%ProgramData%\temper`, while holdouts and secrets stay in your profile, out of its reach.
+account can't see inside your user profile, so on Windows worktrees, gate scratch files and
+holdouts live under `%ProgramData%\temper` (the gate runs holdouts as that account too, and denies
+them to the Builder's code), while secrets stay in your profile, out of its reach. A holdouts
+folder inside your profile fails the holdouts gate with a message saying where to move it. srt runs
+every sandboxed command as that one account, so holdouts can't run against a sandboxed candidate
+app there (the app could read them): for projects with an app command, run the factory on Linux,
+macOS or WSL.
 Install tools machine-wide, or list per-user tool folders in `TEMPER_GATE_ALLOW_READ`.
 
 ## Configuration
@@ -303,6 +308,8 @@ Install tools machine-wide, or list per-user tool folders in `TEMPER_GATE_ALLOW_
 | `TEMPER_CODEX_BIN` | `codex` | Path to the Codex CLI |
 | `TEMPER_CODEX_HOME` | `$TEMPER_HOME/secrets/codex` | Temper's own Codex login, kept apart from `~/.codex` |
 | `TEMPER_AGENT_ENV` | | Extra server variables agent CLIs may see, comma-separated (e.g. a Bedrock setup's). Agents otherwise get only a fixed allowlist |
+| `TEMPER_HOLDOUTS_ROOT` | `$TEMPER_HOME/holdouts` (Windows: `%ProgramData%\temper\holdouts`) | Where new projects' holdouts are created |
+| `TEMPER_SETUP_ALLOW_DOMAINS` | public npm/yarn registries, GitHub, Playwright's CDN | Hosts setup commands may reach, comma-separated (add a private registry here). Setup runs in the sandbox, writing only its folder and the package caches (Windows: `%ProgramData%\temper\cache`) |
 | `TEMPER_GATE_SANDBOX` | `srt` | `off` runs gate commands unsandboxed; for development only |
 | `TEMPER_GATE_ALLOW_READ` | | Extra folders gate commands may read (Windows), separated like `PATH` |
 | `TEMPER_API_URL` | `http://127.0.0.1:4600` | Where the dev console proxies API calls |

@@ -2,9 +2,9 @@ import { cpSync, existsSync, mkdirSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { run } from "./exec.ts";
 
-/** Where Temper keeps a project's holdouts when the board names no folder. */
-export const defaultHoldoutsPath = (home: string, projectName: string) =>
-  join(home, "holdouts", projectName.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "project");
+/** Where Temper keeps a project's holdouts when the board names no folder (see Config.holdoutsRoot). */
+export const defaultHoldoutsPath = (holdoutsRoot: string, projectName: string) =>
+  join(holdoutsRoot, projectName.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "project");
 
 /** The command that runs a holdouts folder made from the starter template. */
 export const STARTER_HOLDOUTS_COMMAND = "node run.mjs";

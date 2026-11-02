@@ -1,8 +1,7 @@
 import { spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { createHash } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join, relative } from "node:path";
+import { homedir } from "node:os";
 import { and, desc, eq } from "drizzle-orm";
 import {
   audit,
@@ -66,10 +65,10 @@ import { createPullRequest, deleteRemoteBranch, mergePullRequest, prBody, prStat
 import { bootApp } from "./app-runner.ts";
 import { protectedDirs, type Config } from "./config.ts";
 import { probeGateIsolation, type GateProbeResult } from "./probe.ts";
-import type { Sandbox } from "./sandbox.ts";
+import { personalSecretDirs, windowsGateRoot, type Sandbox } from "./sandbox.ts";
+import { runSetupCommand, runSetupOnce, setupCaches, setupKey } from "./setup.ts";
 import { diffGuard } from "./gates/diff-guard.ts";
 import { builderFeedback as holdoutFeedback, parseHoldoutResults } from "./gates/holdout-results.ts";
-import { runShell } from "./exec.ts";
 import { issueLine } from "./github-import.ts";
 import { runChecks } from "./gates/run.ts";
 import {
@@ -121,6 +120,12 @@ export const AGENT_ENV: Record<string, string> = {
   GIT_CONFIG_VALUE_1: "false",
 };
 const MAX_GATE_CONCURRENCY = 2;
+
+/** Whether `path` is `dir` or inside it (case-insensitively on Windows). */
+function isInside(dir: string, path: string): boolean {
+  const rel = relative(process.platform === "win32" ? dir.toLowerCase() : dir, process.platform === "win32" ? path.toLowerCase() : path);
+  return !rel.startsWith("..") && !isAbsolute(rel);
+}
 
 /** Base ref for worktrees and diffs: the remote branch when there is a remote. */
 export const baseRef = (p: Project) => (p.remoteUrl ? `origin/${p.defaultBranch}` : p.defaultBranch);
@@ -290,13 +295,37 @@ export class Factory extends EventEmitter {
     const sandbox: Sandbox = {
       mode: this.config.gateSandbox,
       allowRead: this.config.gateAllowRead,
-      denyRead: [...protectedDirs(this.config), ...(project.holdoutsPath ? [project.holdoutsPath] : [])],
+      denyRead: [...protectedDirs(this.config), ...personalSecretDirs(), ...(project.holdoutsPath ? [project.holdoutsPath] : [])],
     };
     if (sandbox.mode === "off") return sandbox;
     this.gateProbe ??= this.probeGateSandbox();
     const probe = await this.gateProbe;
     if (!probe.isolated) throw new Error(`the gate sandbox failed its isolation probe: ${probe.problems.join("; ")}`);
     return sandbox;
+  }
+
+  /**
+   * The sandbox for one gate run's holdouts (Verifier-written code, SEC-01). Same isolation as the
+   * Builder's code, gated by the same probe, but the other way round on what it may read: the
+   * holdouts and this ticket's candidate, never another ticket's worktree. Holdouts run read-only
+   * and reach only the candidate app (see the holdouts check).
+   */
+  private async holdoutsSandboxFor(project: Project, worktree: string): Promise<Sandbox> {
+    const builder = await this.sandboxFor(project);
+    const inProfile = project.holdoutsPath && process.platform === "win32" && builder.mode === "srt" && isInside(homedir(), project.holdoutsPath);
+    if (inProfile) {
+      throw new Error(
+        `the holdouts folder ${project.holdoutsPath} is inside your user profile, which the sandbox account that runs them on Windows cannot read. ` +
+          `Move it under ${windowsGateRoot()} and update the project's holdouts path; holdouts never run outside the sandbox.`,
+      );
+    }
+    return {
+      mode: builder.mode,
+      denyRead: [...protectedDirs(this.config), ...personalSecretDirs(), this.config.worktreesDir],
+      // allowRead re-opens paths inside a denied one; on Windows it also grants the sandbox account
+      // read access to the holdouts, which may live in the user's profile.
+      allowRead: [...(builder.allowRead ?? []), worktree, ...(project.holdoutsPath ? [project.holdoutsPath] : [])],
+    };
   }
 
   private async probeGateSandbox(): Promise<GateProbeResult> {
@@ -450,21 +479,37 @@ export class Factory extends EventEmitter {
     return updateTicket(this.db, t.id, { worktreePath: path, branch });
   }
 
-  /** Installs the holdouts' own dependencies whenever their manifests change. */
+  /** Installs the holdouts' own dependencies whenever the command or their manifests change. */
   private async ensureHoldoutsSetup(project: Project): Promise<void> {
     if (!project.holdoutsSetupCommand || !project.holdoutsPath) return;
-    const manifests = ["package.json", "pnpm-lock.yaml", "package-lock.json"]
-      .map((f) => join(project.holdoutsPath!, f))
-      .filter((f) => existsSync(f))
-      .map((f) => readFileSync(f, "utf8"))
-      .join("\0");
-    const hash = createHash("sha256").update(project.holdoutsSetupCommand + manifests).digest("hex").slice(0, 16);
-    const marker = join(project.holdoutsPath, ".git", `temper-setup-${hash}`);
-    if (existsSync(marker)) return;
-    const r = await runShell(project.holdoutsSetupCommand, { cwd: project.holdoutsPath, timeoutMs: 20 * 60_000 });
-    if (r.code !== 0) throw new Error(`holdouts setup failed (exit ${r.code}):\n${(r.stdout + r.stderr).slice(-2000)}`);
-    writeFileSync(marker, new Date().toISOString());
-    await audit(this.db, { actor: "system", kind: "holdouts.setup", subject: project.id });
+    await this.runSetup("holdouts", project, project.holdoutsSetupCommand, project.holdoutsPath, join(project.holdoutsPath, ".git", "temper-setup-ok"), project.id);
+  }
+
+  /**
+   * Runs a setup command in the sandbox (SEC-02): install scripts are repository code. It writes
+   * only `cwd` and the package caches, reaches only the package registries, and is denied
+   * Temper's secrets, the user's credentials, the worktrees (but `cwd`) and, for the project's
+   * setup, the holdouts. A sandbox that fails its probe fails the setup; nothing runs on the host.
+   */
+  private async runSetup(kind: "project" | "holdouts", project: Project, command: string, cwd: string, marker: string, subject: string): Promise<void> {
+    const builder = await this.sandboxFor(project);
+    const sandbox: Sandbox = {
+      mode: builder.mode,
+      denyRead: [...protectedDirs(this.config), ...personalSecretDirs(), this.config.worktreesDir, ...(kind === "project" && project.holdoutsPath ? [project.holdoutsPath] : [])],
+      allowRead: [...(builder.allowRead ?? []), cwd],
+    };
+    const { ran, result } = await runSetupOnce(marker, setupKey(command, cwd), () =>
+      runSetupCommand(command, sandbox, { cwd, domains: this.config.setupDomains, caches: setupCaches() }),
+    );
+    if (!ran || !result) return;
+    const ok = result.code === 0 && !result.timedOut;
+    await audit(this.db, {
+      actor: "system",
+      kind: ok ? (kind === "project" ? "worktree.setup" : "holdouts.setup") : "setup.failed",
+      subject,
+      data: { kind, sandbox: sandbox.mode, ...(ok ? {} : { exit: result.code, timedOut: result.timedOut }) },
+    });
+    if (!ok) throw new Error(`${kind} setup failed (${result.timedOut ? "timed out" : `exit ${result.code}`}) in the sandbox:\n${(result.stdout + result.stderr).slice(-2000)}`);
   }
 
   /** Done tickets of a project: their holdouts are regression checks for everything after. */
@@ -473,17 +518,12 @@ export class Factory extends EventEmitter {
   }
 
   /**
-   * Runs the project's setup command once per worktree, on the server and outside any agent
-   * sandbox (agents have no network). A marker next to the worktree records success.
+   * Runs the project's setup command in each worktree before agents work there (agents have no
+   * network), in the sandbox (see runSetup). A marker next to the worktree records the success.
    */
   private async ensureSetup(ticket: Ticket, project: Project): Promise<void> {
     if (!project.setupCommand || !ticket.worktreePath) return;
-    const marker = `${ticket.worktreePath}.setup-ok`;
-    if (existsSync(marker)) return;
-    const r = await runShell(project.setupCommand, { cwd: ticket.worktreePath, timeoutMs: 20 * 60_000 });
-    if (r.code !== 0) throw new Error(`setup command failed (exit ${r.code}):\n${(r.stdout + r.stderr).slice(-2000)}`);
-    writeFileSync(marker, new Date().toISOString());
-    await audit(this.db, { actor: "system", kind: "worktree.setup", subject: ticket.id });
+    await this.runSetup("project", project, project.setupCommand, ticket.worktreePath, `${ticket.worktreePath}.setup-ok`, ticket.id);
   }
 
   private async project(t: Ticket): Promise<Project> {
@@ -704,6 +744,7 @@ export class Factory extends EventEmitter {
         ticket,
         worktree,
         sandbox: await this.sandboxFor(project),
+        holdoutsSandbox: stage.checks.includes("holdouts") ? await this.holdoutsSandboxFor(project, worktree) : undefined,
         regressionTickets: await this.regressionTickets(project.id),
         signal,
         onEvent,

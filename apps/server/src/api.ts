@@ -133,7 +133,7 @@ export function createApi(db: Db, factory: Factory, config: Config, opts: { upti
   app.post("/api/projects", async (c) => {
     const input = NewProject.parse(await c.req.json());
     // Every project gets a holdouts folder: the one named, or one Temper keeps, started from the template.
-    const holdoutsPath = input.holdoutsPath ?? defaultHoldoutsPath(config.home, input.name);
+    const holdoutsPath = input.holdoutsPath ?? defaultHoldoutsPath(config.holdoutsRoot, input.name);
     let created: boolean;
     try {
       ({ created } = await initHoldouts(holdoutsPath, join(config.appRoot, "templates", "holdouts")));
