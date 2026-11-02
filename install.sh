@@ -59,6 +59,7 @@ ok "node $(node --version)"
 
 if has claude; then ok "claude CLI found"; else warn "Claude Code CLI not found: install it from https://docs.claude.com/en/docs/claude-code and sign in"; fi
 if has gh; then ok "GitHub CLI found"; else warn "GitHub CLI not found: install it from https://cli.github.com and run 'gh auth login'"; fi
+if has gitleaks; then ok "gitleaks found"; else warn "gitleaks not found: Temper pushes no changes without it. Install it (macOS: brew install gitleaks) or a release from https://github.com/gitleaks/gitleaks/releases"; fi
 
 # ---------------------------------------------------------------------------------------------
 step "Getting Temper"

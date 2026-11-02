@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { builderFeedback, parseHoldoutResults } from "../src/gates/holdout-results.ts";
 import { diffGuard } from "../src/gates/diff-guard.ts";
-import { scanAddedLines } from "../src/gates/secret-scan.ts";
 
 describe("diffGuard", () => {
   const base = { ticketType: "feature", fileScope: ["apps/web/src/*"], existingTestDiff: "" };
@@ -73,9 +72,3 @@ describe("holdout results", () => {
   });
 });
 
-describe("scanAddedLines", () => {
-  it("flags added secrets only", () => {
-    const d = ["+++ b/config.ts", "+const API_KEY = 'abc123'", "-const OLD_TOKEN = 'x'", "+const port = 4600"].join("\n");
-    expect(scanAddedLines(d)).toEqual(["config.ts: possible secret"]);
-  });
-});
