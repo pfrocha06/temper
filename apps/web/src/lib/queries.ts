@@ -221,6 +221,13 @@ export const useApplyUpdate = () => {
 
 export const useStartTicket = () => useInvalidating((id: string) => post<Ticket>(`/tickets/${encodeURIComponent(id)}/start`), [keys.tickets, ["ticket"]]);
 
+/** Starts a work item's backlog tickets one request at a time; the factory still honours their dependencies. */
+export const useStartTickets = () =>
+  useInvalidating(async (ids: string[]) => {
+    for (const id of ids) await post<Ticket>(`/tickets/${encodeURIComponent(id)}/start`);
+    return ids.length;
+  }, [keys.tickets, ["ticket"]]);
+
 export const useCancelTicket = () =>
   useInvalidating((id: string) => post<{ ok: true }>(`/tickets/${encodeURIComponent(id)}/cancel`), [keys.tickets, ["ticket"], keys.status]);
 

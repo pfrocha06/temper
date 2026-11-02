@@ -12,15 +12,16 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRightIcon, FileInputIcon, FolderGit2Icon, ListPlusIcon, PlusIcon } from "lucide-react";
+import { ChevronDownIcon, ChevronRightIcon, FileInputIcon, FolderGit2Icon, ListPlusIcon, PlusIcon } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { PipelineStrip } from "@/components/pipeline";
 import { PageHeader, QueryError, RowsSkeleton } from "@/components/query-state";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuShortcut, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
-import { Kbd } from "@/components/ui/kbd";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { CancelTicketDialog } from "@/features/ticket/ticket-actions";
 import { useAppActions } from "@/hooks/use-app-actions";
 import { useArrivals } from "@/hooks/use-arrivals";
@@ -29,14 +30,17 @@ import { useProject } from "@/hooks/use-project";
 import { filterTickets, groupByStatus } from "@/lib/board";
 import { STATUS_LABEL } from "@/lib/constants";
 import { derivePipeline, dispatchesByTicket } from "@/lib/pipeline";
-import { dispatchesQuery, statusQuery, ticketsQuery, useStartTicket } from "@/lib/queries";
+import { dispatchesQuery, statusQuery, ticketsQuery, useStartTicket, useStartTickets } from "@/lib/queries";
 import type { Ticket, TicketStatus } from "@/lib/types";
+import { groupWork, workColumn, workColumns, type WorkItem } from "@/lib/work";
 import { ActivityStrip } from "./activity-strip";
 import { BoardColumn } from "./board-column";
 import { canDrop, liveFor } from "./board-model";
-import { SourceFilter } from "./source-filter";
+import { ON, SourceFilter } from "./source-filter";
 import { TicketCard } from "./ticket-card";
 import { TicketSheet } from "./ticket-sheet";
+import { WorkBoard } from "./work-board";
+import { WorkSheet } from "./work-sheet";
 
 const NO_DISPATCHES: never[] = [];
 const titleOf = (data: unknown) => (data as { ticket?: Ticket } | undefined)?.ticket?.title ?? "the ticket";
@@ -54,8 +58,12 @@ export function BoardPage() {
   const status = useQuery(statusQuery);
   const { show } = useAppActions();
   const start = useStartTicket();
+  const startMany = useStartTickets();
   const [params, setParams] = useSearchParams();
   const openId = params.get("t");
+  const openWork = params.get("w");
+  // The board shows delegated work (issues and specs) by default; tickets are one click away.
+  const view = params.get("view") === "tickets" ? "tickets" : "issues";
   const [cancelling, setCancelling] = useState<Ticket | null>(null);
   const [dragging, setDragging] = useState<Ticket | null>(null);
   const [showCancelled, setShowCancelled] = useState(false);
@@ -68,9 +76,12 @@ export function BoardPage() {
   const ticketList = tickets.data;
   const dispatchList = dispatches.data ?? NO_DISPATCHES;
   const source = params.get("source") ?? undefined;
-  const issue = (source && params.get("issue")) || undefined;
+  const issue = (view === "tickets" && source && params.get("issue")) || undefined;
   const shown = useMemo(() => filterTickets(ticketList ?? [], { source, issue }), [ticketList, source, issue]);
   const columns = useMemo(() => groupByStatus(shown), [shown]);
+  const allWork = useMemo(() => groupWork(ticketList ?? []), [ticketList]);
+  const work = useMemo(() => groupWork(shown), [shown]);
+  const workCols = useMemo(() => workColumns(work), [work]);
   const setFilter = useCallback(
     (next: { source?: string; issue?: string }) =>
       setParams((p) => {
@@ -88,10 +99,36 @@ export function BoardPage() {
   }, [ticketList, dispatchList]);
   const ticketById = useMemo(() => new Map((ticketList ?? []).map((t) => [t.id, t])), [ticketList]);
   const fresh = useArrivals(ticketList?.map((t) => `${t.id}:${t.status}`));
+  const freshWork = useArrivals(ticketList ? work.map((i) => `${i.key}:${workColumn(i)}`) : undefined);
   const active = status.data?.active ?? NO_DISPATCHES;
   const now = useNow(active.length > 0);
 
   const onOpen = useCallback((id: string) => setParams((p) => (p.set("t", id), p)), [setParams]);
+  const onOpenWork = useCallback((key: string) => setParams((p) => (p.set("w", key), p)), [setParams]);
+  const onCloseWork = useCallback(() => setParams((p) => (p.delete("w"), p)), [setParams]);
+  const onOpenTicketOfWork = useCallback((id: string) => setParams((p) => (p.delete("w"), p.set("t", id), p)), [setParams]);
+  const setView = useCallback(
+    (v: string) =>
+      setParams((p) => {
+        if (v === "tickets") p.set("view", "tickets");
+        else p.delete("view");
+        p.delete("issue");
+        return p;
+      }),
+    [setParams],
+  );
+  const onStartWork = useCallback(
+    (item: WorkItem) => {
+      const ids = item.tickets.filter((t) => t.status === "backlog").map((t) => t.id);
+      startMany.mutate(ids, {
+        onSuccess: (n) => toast.success(`Started “${item.title}”`, { description: `${n} ${n === 1 ? "ticket" : "tickets"}; each waits for the ones it depends on.` }),
+        onError: (e) => toast.error(`Could not start: ${e.message}`),
+      });
+    },
+    // `startMany.mutate` is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
   const onClose = useCallback(() => setParams((p) => (p.delete("t"), p)), [setParams]);
   const onStart = useCallback(
     (t: Ticket) =>
@@ -120,47 +157,82 @@ export function BoardPage() {
   const total = ticketList?.length ?? 0;
   const filtered = shown.length !== total;
   const counts = Object.fromEntries(columns.map((c) => [c.status, c.tickets.length])) as Record<TicketStatus, number>;
+  const needYou = workCols.find((c) => c.column === "needs_you")!.items.length;
+  const unit = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const openItem = openWork ? allWork.find((i) => i.key === openWork) : undefined;
 
   return (
     <div className="flex h-full flex-col">
       <PageHeader
         title="Board"
-        info="Drag a backlog ticket to Ready to start it, or any open ticket onto Cancelled. Click a card for a quick look."
+        info={
+          view === "issues"
+            ? "Each card is an issue or spec you handed over. Start it and the factory works through its tickets; it moves to Needs you when a decision is yours. Click a card to see its tickets."
+            : "Every ticket the factory works on. Drag a backlog ticket to Ready to start it, or any open ticket onto Cancelled. Click a card for a quick look."
+        }
         meta={
           project ? (
-            <>
-              <span className="tabular-nums">{filtered ? `${shown.length} of ${total} tickets` : `${total} tickets`}</span>
-              {counts.awaiting_board > 0 ? <span className="font-medium text-board tabular-nums">{counts.awaiting_board} need you</span> : null}
-            </>
+            view === "issues" ? (
+              <>
+                <span className="tabular-nums">{work.length !== allWork.length ? `${work.length} of ${allWork.length}` : unit(work.length, "issue", "issues")}</span>
+                {needYou > 0 ? <span className="font-medium text-board tabular-nums">{needYou} need you</span> : null}
+              </>
+            ) : (
+              <>
+                <span className="tabular-nums">{filtered ? `${shown.length} of ${total} tickets` : `${total} tickets`}</span>
+                {counts.awaiting_board > 0 ? <span className="font-medium text-board tabular-nums">{counts.awaiting_board} need you</span> : null}
+              </>
+            )
           ) : null
         }
         actions={
           <>
-            <Button variant="outline" size="sm" onClick={() => show("import-issues")} disabled={!project}>
-              <ListPlusIcon data-icon="inline-start" />
-              Import issues
-              <Kbd className="ml-1 max-md:hidden">E</Kbd>
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => show("import-spec")} disabled={!project}>
-              <FileInputIcon data-icon="inline-start" />
-              Import spec
-              <Kbd className="ml-1 max-md:hidden">I</Kbd>
-            </Button>
-            <Button size="sm" onClick={() => show("new-ticket")} disabled={!project}>
-              <PlusIcon data-icon="inline-start" />
-              New ticket
-              <Kbd className="ml-1 bg-primary-foreground/15 text-primary-foreground max-md:hidden">N</Kbd>
-            </Button>
+            <ToggleGroup type="single" variant="outline" size="sm" value={view} onValueChange={(v) => v && setView(v)} aria-label="Show">
+              <ToggleGroupItem value="issues" className={ON}>
+                Issues
+              </ToggleGroupItem>
+              <ToggleGroupItem value="tickets" className={ON}>
+                Tickets
+              </ToggleGroupItem>
+            </ToggleGroup>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" disabled={!project}>
+                  <PlusIcon data-icon="inline-start" />
+                  Add work
+                  <ChevronDownIcon data-icon="inline-end" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => show("import-issues")}>
+                  <ListPlusIcon />
+                  Import issues
+                  <DropdownMenuShortcut>E</DropdownMenuShortcut>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => show("import-spec")}>
+                  <FileInputIcon />
+                  Import spec
+                  <DropdownMenuShortcut>I</DropdownMenuShortcut>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => show("new-ticket")}>
+                  <PlusIcon />
+                  New ticket
+                  <DropdownMenuShortcut>N</DropdownMenuShortcut>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         }
       />
-      {ticketList ? <SourceFilter tickets={ticketList} source={source} issue={issue} onChange={setFilter} /> : null}
+      {ticketList ? <SourceFilter tickets={ticketList} items={view === "issues" ? allWork : undefined} source={source} issue={issue} onChange={setFilter} /> : null}
       <ActivityStrip status={status.data} dispatches={dispatchList} ticketById={ticketById} />
       <div className="min-h-0 flex-1 p-3 md:px-6 md:py-4">
         {tickets.isError ? (
           <QueryError error={tickets.error} what="tickets" onRetry={() => void tickets.refetch()} />
         ) : tickets.isPending ? (
           <RowsSkeleton rows={5} />
+        ) : view === "issues" ? (
+          <WorkBoard columns={workCols} active={active} now={now} fresh={freshWork} onOpen={onOpenWork} onStart={onStartWork} />
         ) : (
           <DndContext
             sensors={sensors}
@@ -229,6 +301,15 @@ export function BoardPage() {
           </DndContext>
         )}
       </div>
+      <WorkSheet
+        item={openItem}
+        pipelines={pipelines}
+        active={active}
+        starting={startMany.isPending}
+        onClose={onCloseWork}
+        onOpenTicket={onOpenTicketOfWork}
+        onStart={onStartWork}
+      />
       <TicketSheet ticketId={openId} onClose={onClose} onStart={onStart} onCancel={onCancel} />
       <CancelTicketDialog ticket={cancelling} onClose={() => setCancelling(null)} />
     </div>

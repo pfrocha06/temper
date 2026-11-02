@@ -6,31 +6,36 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { externalRefLabel } from "@/components/badges";
 import { issuesOf, NO_SOURCE, sourceCounts, type TicketSource } from "@/lib/board";
 import type { Ticket } from "@/lib/types";
+import { workSourceCounts, type WorkItem } from "@/lib/work";
 
 const ALL = "__all__";
 const SOURCE_LABEL: Record<string, string> = { github: "GitHub", jira: "Jira", [NO_SOURCE]: "No tracker" };
 const labelOf = (s: TicketSource) => SOURCE_LABEL[s] ?? s;
 /** The default toggle "on" (muted) barely shows on dark; a picked filter has to read as picked. */
-const ON = "data-[state=on]:border-primary data-[state=on]:bg-primary/15 data-[state=on]:text-foreground";
+export const ON = "data-[state=on]:border-primary data-[state=on]:bg-primary/15 data-[state=on]:text-foreground";
 
 /**
  * Narrows the board to where tickets came from: a tracker (and one of its issues, since an
  * issue usually becomes several tickets) or the board itself. Hidden while every ticket has
- * the same source and no filter is set.
+ * the same source and no filter is set. Given work items (the Issues view), it counts those, and an
+ * issue is its own card, so there is no issue picker.
  */
 export function SourceFilter({
   tickets,
+  items,
   source,
   issue,
   onChange,
 }: {
   tickets: Ticket[];
+  items?: WorkItem[];
   source: string | undefined;
   issue: string | undefined;
   onChange: (f: { source?: string; issue?: string }) => void;
 }) {
-  const counts = useMemo(() => sourceCounts(tickets), [tickets]);
-  const issues = useMemo(() => (source && source !== NO_SOURCE ? issuesOf(tickets, source) : []), [tickets, source]);
+  const counts = useMemo(() => (items ? workSourceCounts(items) : sourceCounts(tickets)), [items, tickets]);
+  const issues = useMemo(() => (!items && source && source !== NO_SOURCE ? issuesOf(tickets, source) : []), [items, tickets, source]);
+  const all = items ? items.length : tickets.length;
   if (counts.length < 2 && !source) return null;
 
   return (
@@ -46,7 +51,7 @@ export function SourceFilter({
         className="flex-wrap"
       >
         <ToggleGroupItem value={ALL} className={ON}>
-          All <span className="text-muted-foreground tabular-nums">{tickets.length}</span>
+          All <span className="text-muted-foreground tabular-nums">{all}</span>
         </ToggleGroupItem>
         {counts.map((c) => (
           <ToggleGroupItem key={c.source} value={c.source} className={`gap-1.5 ${ON}`}>
