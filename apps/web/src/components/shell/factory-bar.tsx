@@ -15,6 +15,7 @@ import { statusQuery, useSetPaused } from "@/lib/queries";
 import type { LiveState } from "@/hooks/use-live-updates";
 import { EnvironmentPicker } from "./environment-picker";
 import { ProjectPicker } from "./project-picker";
+import { UpdateButton } from "./update-button";
 
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
@@ -83,6 +84,7 @@ export function FactoryBar({ live }: { live: LiveState }) {
         </p>
       ) : null}
       <div className="ml-auto flex items-center gap-2 md:gap-3">
+        <UpdateButton />
         <Button variant="outline" size="sm" onClick={() => show("palette")} className="text-muted-foreground" aria-label="Open command palette">
           <SearchIcon data-icon="inline-start" />
           <span className="max-md:hidden">Jump to</span>

@@ -5,6 +5,7 @@ import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import {
+  audit,
   createProject,
   createTicket,
   dispatchEventsAfter,
@@ -53,6 +54,7 @@ import { GithubImportError, importFromGithub } from "./github-import.ts";
 import { importFromJira, JiraImportError } from "./jira-import.ts";
 import { githubFilters, importOne, IntakeError, intakeSources, jiraFilters, searchIntake, type IntakeDeps } from "./intake.ts";
 import { JiraError } from "../../../plugins/jira/src/index.ts";
+import { UpdateError, type Updater } from "./updates.ts";
 import { loadProfile, type Profile } from "./profile.ts";
 import { listProviders } from "./providers.ts";
 import { inventory } from "./tools.ts";
@@ -98,7 +100,7 @@ const AgentEdit = z.object({
   instructions: z.string(),
 });
 
-export function createApi(db: Db, factory: Factory, config: Config, opts: { uptime?: () => number; auth?: Auth; profile?: Profile; intake?: Pick<IntakeDeps, "issues" | "repoFilters" | "fetchFn"> } = {}): Hono {
+export function createApi(db: Db, factory: Factory, config: Config, opts: { uptime?: () => number; auth?: Auth; profile?: Profile; intake?: Pick<IntakeDeps, "issues" | "repoFilters" | "fetchFn">; updater?: Updater } = {}): Hono {
   const app = new Hono();
   const health = createHealth(config, opts.uptime);
   const auth = opts.auth;
@@ -211,6 +213,22 @@ export function createApi(db: Db, factory: Factory, config: Config, opts: { upti
       throw e;
     }
   });
+
+  // Updates: is a newer commit on origin, and apply it (build, verify, drain, switch) on request.
+  app.get("/api/update", (c) => (opts.updater ? c.json(opts.updater.get()) : c.json({ error: "update checks are off" }, 404)));
+  app.post("/api/update/check", async (c) => (opts.updater ? c.json(await opts.updater.check()) : c.json({ error: "update checks are off" }, 404)));
+  app.post("/api/update/apply", async (c) => {
+    if (!opts.updater) return c.json({ error: "update checks are off" }, 404);
+    try {
+      const status = await opts.updater.apply();
+      await audit(db, { actor: "board", kind: "update.started", subject: status.applying!.target });
+      return c.json(status, 202);
+    } catch (e) {
+      if (e instanceof UpdateError) return c.json({ error: e.message }, 409);
+      throw e;
+    }
+  });
+  app.get("/api/update/log", (c) => (opts.updater ? c.json({ log: opts.updater.logTail() }) : c.json({ error: "update checks are off" }, 404)));
 
   // The console's issue picker: sources, filters, a search that imports nothing, one-issue imports.
   const intakeDeps = (): IntakeDeps => ({

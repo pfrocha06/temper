@@ -2,7 +2,13 @@ import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, rmSync, symlink
 import { join } from "node:path";
 import { run, runShell } from "./exec.ts";
 
-export type ReleaseState = { current?: string; previous?: string; history: Array<{ tag: string; at: string; event: string }> };
+export type ReleaseState = {
+  current?: string;
+  previous?: string;
+  /** The checkout releases are built from, and updates fetched into. */
+  source?: string;
+  history: Array<{ tag: string; at: string; event: string }>;
+};
 
 export const releasesDir = (home: string) => join(home, "releases");
 export const currentLink = (home: string) => join(home, "current");
@@ -21,7 +27,7 @@ function writeState(home: string, s: ReleaseState) {
  * Points `current` at a release and records the transition. Pure filesystem; no restarts.
  * A deploy makes the old current the previous; a rollback swaps current and previous.
  */
-export function activate(home: string, tag: string, event: "deploy" | "rollback"): ReleaseState {
+export function activate(home: string, tag: string, event: "deploy" | "rollback", source?: string): ReleaseState {
   const target = join(releasesDir(home), tag);
   if (!existsSync(target)) throw new Error(`release ${tag} is not built`);
   const state = readState(home);
@@ -29,6 +35,7 @@ export function activate(home: string, tag: string, event: "deploy" | "rollback"
   if (existsSync(link) || lstatSafe(link)) unlinkSync(link);
   symlinkSync(target, link);
   const next: ReleaseState = {
+    ...((source ?? state.source) ? { source: source ?? state.source } : {}),
     current: tag,
     previous: state.current === tag ? state.previous : state.current,
     history: [...state.history, { tag, at: new Date().toISOString(), event }].slice(-50),

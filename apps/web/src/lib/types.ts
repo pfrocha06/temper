@@ -168,3 +168,17 @@ export type IntakeCandidate = {
   ticketId?: string;
 };
 export type IntakeImportResult = { key: string; url: string; status: "imported" | "skipped"; ticketIds: string[]; reason?: string; existingTicketId?: string };
+
+// Updates (the top bar's "Update available"); shape from apps/server/src/updates.ts.
+export type UpdateStatus = {
+  current: string;
+  branch: string;
+  latest?: string;
+  behind: number;
+  commits: Array<{ sha: string; subject: string }>;
+  diverged: boolean;
+  checkedAt?: string;
+  error?: string;
+  service: "launchd" | "systemd" | "none";
+  applying?: { startedAt: string; target: string; log: string; finished?: "ok" | "failed" };
+};
