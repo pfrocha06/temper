@@ -22,7 +22,7 @@ export type Config = {
   /**
    * Where projects' holdouts live unless the board names a folder (TEMPER_HOLDOUTS_ROOT). On Windows
    * the gate runs holdouts as srt's sandbox account, which cannot read inside the user's profile,
-   * so they live under %ProgramData%	emper there; the Builder's code is denied them everywhere.
+   * so they live under %ProgramData%\temper there; the Builder's code is denied them everywhere.
    */
   holdoutsRoot: string;
   /** Hosts setup commands may reach (TEMPER_SETUP_ALLOW_DOMAINS, comma-separated; default: public package registries). */
@@ -33,6 +33,10 @@ export type Config = {
   gateSandbox: SandboxMode;
   /** The gitleaks command the secret scan runs (TEMPER_GITLEAKS, a path; default `gitleaks` on PATH). */
   gitleaks: string[];
+  /** How often the pr gate polls GitHub for the required checks (TEMPER_CI_POLL_MS). */
+  ciPollMs: number;
+  /** How long it waits for them before handing the ticket to the board (TEMPER_CI_TIMEOUT_MS). */
+  ciTimeoutMs: number;
   /** Server variables agent CLIs get on top of their allowlist (TEMPER_AGENT_ENV, comma-separated names). */
   agentEnv: string[];
   /** Extra paths gate commands may read (Windows: per-user tool installs the sandbox account cannot see). */
@@ -64,6 +68,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     holdoutsRoot: env.TEMPER_HOLDOUTS_ROOT ?? (process.platform === "win32" ? join(windowsGateRoot(), "holdouts") : join(home, "holdouts")),
     gateSandbox: env.TEMPER_GATE_SANDBOX === "off" ? "off" : "srt",
     gitleaks: [env.TEMPER_GITLEAKS || "gitleaks"],
+    ciPollMs: Number(env.TEMPER_CI_POLL_MS ?? 30_000),
+    ciTimeoutMs: Number(env.TEMPER_CI_TIMEOUT_MS ?? 60 * 60_000),
     agentEnv: (env.TEMPER_AGENT_ENV ?? "").split(",").map((s) => s.trim()).filter(Boolean),
     gateAllowRead: (env.TEMPER_GATE_ALLOW_READ ?? "").split(delimiter).filter(Boolean),
   };

@@ -1,5 +1,7 @@
 # Merge readiness
 
+Status: AC-1 built (`mergeReadiness` in `plugins/github`, `Factory.waitForCi`); AC-2 to AC-4 open.
+
 ## Why
 The first real PRs showed the board being asked to merge before GitHub CI finished, with no way
 to try the change and no visual evidence, and nothing refreshes a PR when `main` moves.

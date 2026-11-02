@@ -35,4 +35,4 @@ stages:
   - id: pr
     kind: gate
     checks: [open_pr, await_merge]
-    on: { PASS: done, FAIL: board }
+    on: { PASS: done, FAIL: author, BLOCKED: board }
