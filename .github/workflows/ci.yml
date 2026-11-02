@@ -54,6 +54,27 @@ jobs:
         if: runner.os == 'Windows'
         run: codex sandbox setup --elevated --current-user --codex-home "$TEMPER_TEST_CODEX_HOME"
 
+      # The secret scan is gitleaks or nothing (SEC-05): a pinned, checksum-verified release.
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          case "$RUNNER_OS-$RUNNER_ARCH" in
+            Linux-X64) asset="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" ;;
+            macOS-ARM64) asset="gitleaks_${GITLEAKS_VERSION}_darwin_arm64.tar.gz" ;;
+            macOS-X64) asset="gitleaks_${GITLEAKS_VERSION}_darwin_x64.tar.gz" ;;
+            Windows-X64) asset="gitleaks_${GITLEAKS_VERSION}_windows_x64.zip" ;;
+            *) echo "no gitleaks build for $RUNNER_OS-$RUNNER_ARCH"; exit 1 ;;
+          esac
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          dir="$RUNNER_TEMP/gitleaks"; mkdir -p "$dir"; cd "$dir"
+          curl -fsSLO "$base/$asset" && curl -fsSLO "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          sum="sha256sum"; command -v sha256sum >/dev/null || sum="shasum -a 256"
+          grep " $asset\$" "gitleaks_${GITLEAKS_VERSION}_checksums.txt" | $sum -c -
+          case "$asset" in *.zip) unzip -q "$asset" ;; *) tar xzf "$asset" ;; esac
+          echo "$dir" >> "$GITHUB_PATH"
+          ./gitleaks version
+
       - run: pnpm check
 
   # The one-line installers, run for real against this commit on every platform.

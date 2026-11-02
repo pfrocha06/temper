@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto";
 import type { GateCheck, Project, RunEvent, Ticket, Verdict } from "@temper/core";
 import { bootApp } from "../app-runner.ts";
-import { run, runSandboxed, runShell } from "../exec.ts";
+import { runSandboxed, runShell } from "../exec.ts";
 import type { Sandbox } from "../sandbox.ts";
 import { changedFiles, commitsAhead, diff, hasUncommittedChanges, headSha } from "../git.ts";
 import { diffGuard, isTestFile } from "./diff-guard.ts";
 import { builderFeedback, parseHoldoutResults } from "./holdout-results.ts";
 import { throttleOutput } from "./progress.ts";
-import { scanAddedLines } from "./secret-scan.ts";
+import { scanCommits } from "./secret-scan.ts";
 
 export type CheckResult = { check: GateCheck; ok: boolean; report: string; builderFeedback?: string };
 
@@ -17,6 +17,8 @@ export type GateContext = {
   worktree: string;
   /** Confines the Builder's code (the test command, the candidate app). */
   sandbox: Sandbox;
+  /** The gitleaks command (file and leading args); `["gitleaks"]` by default. */
+  gitleaks?: string[];
   /** Merged tickets whose holdouts run as regression checks. */
   regressionTickets?: string[];
   signal?: AbortSignal;
@@ -57,23 +59,14 @@ export async function diffGuardCheck(ctx: GateContext): Promise<CheckResult> {
 }
 
 export async function secretScan(ctx: GateContext): Promise<CheckResult> {
-  const gitleaks = await run("gitleaks", ["version"], { cwd: ctx.worktree });
-  if (gitleaks.code === 0) {
-    const r = await run(
-      "gitleaks",
-      ["git", "--no-banner", "--redact", "--log-opts", `${ctx.project.defaultBranch}..HEAD`, "."],
-      { cwd: ctx.worktree },
-    );
-    const ok = r.code === 0;
-    return { check: "secret_scan", ok, report: ok ? "gitleaks: clean" : `gitleaks found leaks:\n${fence(r.stdout + r.stderr)}`, builderFeedback: ok ? undefined : "Secrets detected in your commits. Remove them and rewrite the commits." };
-  }
-  const hits = scanAddedLines(await diff(ctx.worktree, ctx.project.defaultBranch));
-  const ok = hits.length === 0;
+  const r = await scanCommits(ctx.worktree, ctx.project.defaultBranch, ctx.gitleaks ?? ["gitleaks"]);
+  // Only findings are the Builder's to fix; a missing or failing scanner is the board's.
+  const found = !r.ok && r.report.startsWith("gitleaks found");
   return {
     check: "secret_scan",
-    ok,
-    report: `gitleaks not installed; built-in scan: ${ok ? "clean" : hits.join(", ")}`,
-    builderFeedback: ok ? undefined : `Possible secrets: ${hits.join(", ")}`,
+    ok: r.ok,
+    report: r.report,
+    builderFeedback: found ? `Secrets detected in your commits. Remove them and rewrite the commits.\n${r.report}` : undefined,
   };
 }
 

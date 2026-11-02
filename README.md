@@ -98,7 +98,9 @@ flowchart LR
 ## Quick start
 
 You need [Node.js](https://nodejs.org) 22.18 or later, git, the [GitHub CLI](https://cli.github.com/)
-and the [Claude Code CLI](https://docs.claude.com/en/docs/claude-code), both signed in.
+and the [Claude Code CLI](https://docs.claude.com/en/docs/claude-code), both signed in, and
+[gitleaks](https://github.com/gitleaks/gitleaks) 8.18 or later: Temper scans every change with it before pushing,
+and pushes nothing without it.
 
 **macOS and Linux**
 
@@ -302,6 +304,7 @@ Install tools machine-wide, or list per-user tool folders in `TEMPER_GATE_ALLOW_
 | `TEMPER_CLAUDE_BIN` | `claude` | Path to the Claude Code CLI |
 | `TEMPER_CODEX_BIN` | `codex` | Path to the Codex CLI |
 | `TEMPER_CODEX_HOME` | `$TEMPER_HOME/secrets/codex` | Temper's own Codex login, kept apart from `~/.codex` |
+| `TEMPER_GITLEAKS` | `gitleaks` | Path to gitleaks (8.18 or later); required to push changes |
 | `TEMPER_GATE_SANDBOX` | `srt` | `off` runs gate commands unsandboxed; for development only |
 | `TEMPER_GATE_ALLOW_READ` | | Extra folders gate commands may read (Windows), separated like `PATH` |
 | `TEMPER_API_URL` | `http://127.0.0.1:4600` | Where the dev console proxies API calls |

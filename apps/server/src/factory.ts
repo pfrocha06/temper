@@ -71,6 +71,7 @@ import { diffGuard } from "./gates/diff-guard.ts";
 import { builderFeedback as holdoutFeedback, parseHoldoutResults } from "./gates/holdout-results.ts";
 import { runShell } from "./exec.ts";
 import { issueLine } from "./github-import.ts";
+import { scanThenPush } from "./gates/secret-scan.ts";
 import { runChecks } from "./gates/run.ts";
 import {
   changedBetween,
@@ -704,6 +705,7 @@ export class Factory extends EventEmitter {
         ticket,
         worktree,
         sandbox: await this.sandboxFor(project),
+        gitleaks: this.config.gitleaks,
         regressionTickets: await this.regressionTickets(project.id),
         signal,
         onEvent,
@@ -725,7 +727,12 @@ export class Factory extends EventEmitter {
   private async runPrGate(ticket: Ticket, stage: GateStage, project: Project, worktree: string): Promise<StageOutcome> {
     if (stage.checks.includes("open_pr") && !ticket.prUrl) {
       if (!project.remoteUrl) return { verdict: "BLOCKED", summary: "Project has no remote; cannot open a PR." };
-      await pushBranch(worktree, ticket.branch!);
+      // Whatever reaches the remote is scanned right before it goes, whichever gates ran earlier.
+      const scan = await scanThenPush(worktree, baseRef(project), ticket.branch!, this.config.gitleaks, pushBranch);
+      if (!scan.ok) {
+        await audit(this.db, { actor: "system", kind: "secret_scan.blocked_push", subject: ticket.id, data: { report: scan.report.slice(0, 2000) } });
+        return { verdict: "FAIL", summary: `Not pushed: the secret scan did not pass.\n\n${scan.report}` };
+      }
       const arts = new Map((await latestArtifacts(this.db, ticket.id)).map((a) => [a.name, a.content]));
       const changes = await changedFiles(worktree, baseRef(project));
       const areas = [...new Set(changes.map((c) => c.path.split("/").slice(0, 2).join("/")))];

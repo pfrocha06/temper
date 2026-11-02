@@ -22,6 +22,8 @@ export type Config = {
   secretsDir: string;
   /** Sandbox for Builder code the server runs itself (tests, the candidate app). `off` only for development. */
   gateSandbox: SandboxMode;
+  /** The gitleaks command the secret scan runs (TEMPER_GITLEAKS, a path; default `gitleaks` on PATH). */
+  gitleaks: string[];
   /** Extra paths gate commands may read (Windows: per-user tool installs the sandbox account cannot see). */
   gateAllowRead: string[];
 };
@@ -48,6 +50,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     codexHome: env.TEMPER_CODEX_HOME ?? join(home, "secrets", "codex"),
     secretsDir: join(home, "secrets"),
     gateSandbox: env.TEMPER_GATE_SANDBOX === "off" ? "off" : "srt",
+    gitleaks: [env.TEMPER_GITLEAKS || "gitleaks"],
     gateAllowRead: (env.TEMPER_GATE_ALLOW_READ ?? "").split(delimiter).filter(Boolean),
   };
 }
