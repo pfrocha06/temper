@@ -71,10 +71,11 @@ flowchart LR
   build --> verify["Verify<br/>Verifier writes holdouts"]
   verify --> gates["Gates<br/>tests, holdouts, diff guard, secret scan"]
   gates --> review["Review<br/>Reviewer, adversarial"]
-  review --> pr["PR<br/>opened by the server"]
+  review --> pr["PR<br/>opened by the server,<br/>waits for CI"]
   pr --> board{{"You merge"}}
   gates -.->|"fail: failing criterion IDs only"| build
   review -.->|"fail: findings"| build
+  pr -.->|"CI fails: the job's log"| build
 ```
 
 | Role | Does | Never |
@@ -311,6 +312,8 @@ Install tools machine-wide, or list per-user tool folders in `TEMPER_GATE_ALLOW_
 | `TEMPER_CODEX_HOME` | `$TEMPER_HOME/secrets/codex` | Temper's own Codex login, kept apart from `~/.codex` |
 | `TEMPER_AGENT_ENV` | | Extra server variables agent CLIs may see, comma-separated (e.g. a Bedrock setup's). Agents otherwise get only a fixed allowlist |
 | `TEMPER_GITLEAKS` | `gitleaks` | Path to gitleaks (8.18 or later); required to push changes |
+| `TEMPER_CI_POLL_MS` | `30000` | How often a ticket's PR is checked for GitHub's required checks before the board is asked to merge |
+| `TEMPER_CI_TIMEOUT_MS` | `3600000` | How long to wait for those checks before handing the ticket to the board |
 | `TEMPER_HOLDOUTS_ROOT` | `$TEMPER_HOME/holdouts` (Windows: `%ProgramData%\temper\holdouts`) | Where new projects' holdouts are created |
 | `TEMPER_SETUP_ALLOW_DOMAINS` | public npm/yarn registries, GitHub, Playwright's CDN | Hosts setup commands may reach, comma-separated (add a private registry here). Setup runs in the sandbox, writing only its folder and the package caches (Windows: `%ProgramData%\temper\cache`) |
 | `TEMPER_GATE_SANDBOX` | `srt` | `off` runs gate commands unsandboxed; for development only |
@@ -337,7 +340,7 @@ embedded in-process) with [Drizzle](https://orm.drizzle.team), React, Vite, Tail
 
 ## Roadmap
 
-Next up: a harness fingerprint on every run, merge readiness (wait for CI, previews, screenshots),
+Next up: a harness fingerprint on every run, merge readiness (previews, screenshots),
 notifications and a daily briefing, then **planted-defect trials** that give each verifier a
 measured catch rate, and **autonomy levels** that are earned per area from those rates and lost
 when the temperature rises. Progress lives in the pinned [Roadmap issue](https://github.com/pfrocha06/temper/issues/24),

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Scripted stand-in for the `claude` CLI. Behaviour depends on the role named in the prompt.
 import { execFileSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { appendFileSync, writeFileSync } from "node:fs";
 
 const prompt = process.argv[process.argv.indexOf("-p") + 1] ?? "";
 const say = (o) => process.stdout.write(JSON.stringify(o) + "\n");
@@ -11,7 +11,7 @@ say({ type: "system", subtype: "init", session_id: "fake-session", model: "fake"
 let text;
 if (prompt.includes("You are the builder")) {
   if (prompt.includes("Feedback from the previous attempt")) {
-    writeFileSync("hello.txt", "hello\n");
+    appendFileSync("hello.txt", "hello\n"); // appends, so every fix is a new commit
     sh("git", "add", "-A");
     sh("git", "commit", "-q", "-m", "add hello");
     text = "Added hello.txt\nVERDICT: PASS";

@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { isAbsolute, join, relative } from "node:path";
 import { homedir } from "node:os";
+import { setTimeout as sleep } from "node:timers/promises";
 import { and, desc, eq } from "drizzle-orm";
 import {
   audit,
@@ -61,7 +62,7 @@ import {
   type Verdict,
   type Workflow,
 } from "@temper/core";
-import { createPullRequest, deleteRemoteBranch, mergePullRequest, prBody, prState } from "@temper/plugin-github";
+import { createPullRequest, deleteRemoteBranch, failedJobLog, mergePullRequest, mergeReadiness, prBody, prStatus } from "@temper/plugin-github";
 import { bootApp } from "./app-runner.ts";
 import { protectedDirs, type Config } from "./config.ts";
 import { probeGateIsolation, type GateProbeResult } from "./probe.ts";
@@ -97,14 +98,28 @@ export type FactoryOptions = {
   accountOf?: (adapter: string) => Promise<string | undefined>;
   /** Replaces the gate isolation probe (tests: a sandbox that fails it). */
   probeGate?: () => Promise<GateProbeResult>;
+  /** Replaces the pr gate's GitHub calls (tests: a fake GitHub). */
+  github?: GithubOps;
 };
+
+/** What the pr gate asks of the git host. */
+export type GithubOps = {
+  createPullRequest: typeof createPullRequest;
+  prStatus: typeof prStatus;
+  mergePullRequest: typeof mergePullRequest;
+  deleteRemoteBranch: typeof deleteRemoteBranch;
+  failedJobLog: typeof failedJobLog;
+};
+
+const GITHUB: GithubOps = { createPullRequest, prStatus, mergePullRequest, deleteRemoteBranch, failedJobLog };
 
 const ACCOUNT_CHECK_MS = 5 * 60_000;
 
 type AgentStage = Extract<Stage, { kind: "agent" }>;
 type GateStage = Extract<Stage, { kind: "gate" }>;
 
-type Active = { dispatchId: string; ticketId: string; role: Role | "server"; agentId: string; controller: AbortController };
+/** `waiting`: a gate only polling the git host (for CI); it takes no gate slot meanwhile. */
+type Active = { dispatchId: string; ticketId: string; role: Role | "server"; agentId: string; controller: AbortController; waiting?: boolean };
 
 type StageOutcome = { verdict: Verdict; summary: string; artifact?: { name: string; content: string }; feedback?: string; waiting?: boolean };
 
@@ -362,9 +377,19 @@ export class Factory extends EventEmitter {
     void this.tick();
   }
 
+  /** Stops dispatching, cancels running stages and waits for the work already started to end. */
   async stop(): Promise<void> {
     clearInterval(this.timer);
     for (const a of this.active.values()) a.controller.abort();
+    while (this.background.size) await Promise.all(this.background);
+  }
+
+  /** Stages and digests run in the background; `stop` waits for them before the database closes. */
+  private background = new Set<Promise<unknown>>();
+
+  private track(work: Promise<unknown>): void {
+    const done: Promise<unknown> = work.catch(() => {}).finally(() => this.background.delete(done));
+    this.background.add(done);
   }
 
   async setPaused(paused: boolean, actor: Actor = "board"): Promise<void> {
@@ -420,7 +445,7 @@ export class Factory extends EventEmitter {
     for (const t of (await listTickets(this.db)).filter((t) => t.status === "in_progress" && !busy.has(t.id))) {
       const wf = this.workflowFor(t);
       const stage = wf.stages.find((s) => s.id === t.stage) ?? startStage(wf);
-      if (await this.hasCapacity(stage)) void this.runStage(t, wf, stage);
+      if (await this.hasCapacity(stage)) this.track(this.runStage(t, wf, stage));
     }
   }
 
@@ -432,7 +457,7 @@ export class Factory extends EventEmitter {
       if (!(await claimTicket(this.db, t.id, stage.id))) continue;
       try {
         const ticket = await this.prepareWorktree(t);
-        void this.runStage(ticket, wf, stage);
+        this.track(this.runStage(ticket, wf, stage));
       } catch (err) {
         await this.escalate(t, stage.id, `Could not prepare a worktree: ${(err as Error).message}`);
       }
@@ -441,7 +466,7 @@ export class Factory extends EventEmitter {
 
   private async hasCapacity(stage: Stage): Promise<boolean> {
     const active = [...this.active.values()];
-    if (stage.kind === "gate") return active.filter((a) => a.role === "server").length < MAX_GATE_CONCURRENCY;
+    if (stage.kind === "gate") return active.filter((a) => a.role === "server" && !a.waiting).length < MAX_GATE_CONCURRENCY;
     const agent = await this.agentFor(stage.role);
     const refusal = await this.adapterRefusal(agent.adapter);
     if (refusal) {
@@ -732,7 +757,7 @@ export class Factory extends EventEmitter {
     if (!worktree) throw new Error("ticket has no worktree");
 
     if (stage.checks.includes("open_pr") || stage.checks.includes("await_merge")) {
-      return this.runPrGate(ticket, stage, project, worktree);
+      return this.runPrGate(ticket, stage, project, worktree, dispatchId, signal);
     }
     if (stage.checks.includes("holdouts")) await this.ensureHoldoutsSetup(project);
     // Progress is written in order, without holding up the checks themselves.
@@ -767,64 +792,138 @@ export class Factory extends EventEmitter {
     };
   }
 
-  private async runPrGate(ticket: Ticket, stage: GateStage, project: Project, worktree: string): Promise<StageOutcome> {
-    if (stage.checks.includes("open_pr") && !ticket.prUrl) {
+  private async runPrGate(ticket: Ticket, stage: GateStage, project: Project, worktree: string, dispatchId: string, signal: AbortSignal): Promise<StageOutcome> {
+    const gh = this.options.github ?? GITHUB;
+    // Everything below is about this commit: what was pushed, what CI checked, what the board approves.
+    const head = await headSha(worktree);
+    if (stage.checks.includes("open_pr")) {
       if (!project.remoteUrl) return { verdict: "BLOCKED", summary: "Project has no remote; cannot open a PR." };
-      // Whatever reaches the remote is scanned right before it goes, whichever gates ran earlier.
-      const scan = await scanThenPush(worktree, baseRef(project), ticket.branch!, this.config.gitleaks, pushBranch);
-      if (!scan.ok) {
-        await audit(this.db, { actor: "system", kind: "secret_scan.blocked_push", subject: ticket.id, data: { report: scan.report.slice(0, 2000) } });
-        return { verdict: "FAIL", summary: `Not pushed: the secret scan did not pass.\n\n${scan.report}` };
+      // A ticket back from a CI failure has new commits for the PR it already has.
+      const pushed = ticket.prUrl ? (await gh.prStatus(ticket.prUrl)).head : undefined;
+      if (pushed !== head) {
+        // Whatever reaches the remote is scanned right before it goes, whichever gates ran earlier.
+        const scan = await scanThenPush(worktree, baseRef(project), ticket.branch!, this.config.gitleaks, pushBranch);
+        if (!scan.ok) {
+          await audit(this.db, { actor: "system", kind: "secret_scan.blocked_push", subject: ticket.id, data: { report: scan.report.slice(0, 2000) } });
+          return { verdict: "BLOCKED", summary: `Not pushed: the secret scan did not pass.\n\n${scan.report}` };
+        }
+        if (ticket.prUrl) await audit(this.db, { actor: "system", kind: "pr.updated", subject: ticket.id, data: { url: ticket.prUrl, head } });
       }
-      const arts = new Map((await latestArtifacts(this.db, ticket.id)).map((a) => [a.name, a.content]));
-      const changes = await changedFiles(worktree, baseRef(project));
-      const areas = [...new Set(changes.map((c) => c.path.split("/").slice(0, 2).join("/")))];
-      const pr = await createPullRequest(worktree, {
-        base: project.defaultBranch,
-        head: ticket.branch!,
-        title: `${ticket.title} [${ticket.type}]`,
-        body: prBody({
-          ticketId: ticket.id,
-          title: ticket.title,
-          changes: arts.get("changes.md") ?? arts.get("reproduction.md"),
-          verification: arts.get("verification.md"),
-          review: arts.get("review.md"),
-          gates: arts.get("gates.md"),
-          filesChanged: changes.length,
-          areas,
-          issue: ticket.externalRef
-            ? issueLine(ticket.externalRef, (await openTicketsByRef(this.db, ticket.externalRef.tracker, ticket.externalRef.key)).filter((t) => t.id !== ticket.id).length)
-            : undefined,
-        }),
-      });
-      ticket = await updateTicket(this.db, ticket.id, { prUrl: pr.url });
-      await audit(this.db, { actor: "system", kind: "pr.opened", subject: ticket.id, data: { url: pr.url } });
+      if (!ticket.prUrl) {
+        const arts = new Map((await latestArtifacts(this.db, ticket.id)).map((a) => [a.name, a.content]));
+        const changes = await changedFiles(worktree, baseRef(project));
+        const areas = [...new Set(changes.map((c) => c.path.split("/").slice(0, 2).join("/")))];
+        const pr = await gh.createPullRequest(worktree, {
+          base: project.defaultBranch,
+          head: ticket.branch!,
+          title: `${ticket.title} [${ticket.type}]`,
+          body: prBody({
+            ticketId: ticket.id,
+            title: ticket.title,
+            changes: arts.get("changes.md") ?? arts.get("reproduction.md"),
+            verification: arts.get("verification.md"),
+            review: arts.get("review.md"),
+            gates: arts.get("gates.md"),
+            filesChanged: changes.length,
+            areas,
+            issue: ticket.externalRef
+              ? issueLine(ticket.externalRef, (await openTicketsByRef(this.db, ticket.externalRef.tracker, ticket.externalRef.key)).filter((t) => t.id !== ticket.id).length)
+              : undefined,
+          }),
+        });
+        ticket = await updateTicket(this.db, ticket.id, { prUrl: pr.url });
+        await audit(this.db, { actor: "system", kind: "pr.opened", subject: ticket.id, data: { url: pr.url } });
+      }
     }
     if (!stage.checks.includes("await_merge")) return { verdict: "PASS", summary: `PR: ${ticket.prUrl}` };
+    if (!ticket.prUrl) return { verdict: "BLOCKED", summary: "No pull request to merge." };
+    const prUrl = ticket.prUrl;
 
-    // Autonomy level 0: the board merges. Find this ticket's latest merge approval.
-    const decision = await this.latestApproval(ticket.id, "merge");
-    if (!decision || decision.status === "pending") {
-      if (!decision) {
-        await requestApproval(this.db, {
-          kind: "merge",
-          ticketId: ticket.id,
-          title: `Merge: ${ticket.title}`,
-          body: `${ticket.prUrl}\n\nAll gates passed and the reviewer found no blockers. Approve to squash-merge.`,
-          options: ["approve", "reject"],
-        });
-      }
+    // Autonomy level 0: the board merges, and its approval is for one commit.
+    const latest = await this.latestApproval(ticket.id, "merge");
+    const decision = latest && (latest.payload as { head?: string } | null)?.head === head ? latest : undefined;
+    if (latest?.status === "pending" && !decision) {
+      await resolveApproval(this.db, latest.id, "reject", `superseded: the PR is now at ${head.slice(0, 7)}`, "system");
+    }
+    if (decision?.status === "pending") {
       await updateTicket(this.db, ticket.id, { status: "awaiting_board" });
       return { verdict: "PASS", summary: "waiting for the board to merge", waiting: true };
     }
-    if (decision.resolution !== "approve") return { verdict: "FAIL", summary: `Board rejected the merge${decision.note ? `: ${decision.note}` : ""}` };
+    if (decision && decision.resolution !== "approve") return { verdict: "BLOCKED", summary: `Board rejected the merge${decision.note ? `: ${decision.note}` : ""}` };
     // Recoverable: a retry after a partial failure finds the PR merged and only finishes cleanup.
-    const state = await prState(ticket.prUrl!);
-    if (state.state !== "MERGED") await mergePullRequest(ticket.prUrl!);
-    await deleteRemoteBranch(ticket.prUrl!, ticket.branch!);
+    if (decision && (await gh.prStatus(prUrl)).state === "MERGED") return this.finishMerge(ticket, gh);
+
+    // Before asking the board, and again before merging: the required checks on this commit.
+    const notReady = await this.waitForCi(ticket, prUrl, head, gh, dispatchId, signal);
+    if (notReady) return notReady;
+    if (!decision) {
+      await requestApproval(this.db, {
+        kind: "merge",
+        ticketId: ticket.id,
+        title: `Merge: ${ticket.title}`,
+        body: `${prUrl}\n\nAll gates and GitHub's required checks passed on ${head.slice(0, 7)}, and the reviewer found no blockers. Approve to squash-merge.`,
+        options: ["approve", "reject"],
+        payload: { head },
+      });
+      await updateTicket(this.db, ticket.id, { status: "awaiting_board" });
+      return { verdict: "PASS", summary: "waiting for the board to merge", waiting: true };
+    }
+    await gh.mergePullRequest(prUrl, head);
+    return this.finishMerge(ticket, gh);
+  }
+
+  private async finishMerge(ticket: Ticket, gh: GithubOps): Promise<StageOutcome> {
+    await gh.deleteRemoteBranch(ticket.prUrl!, ticket.branch!);
     await recordSignal(this.db, "clean_merge", ticket.id);
     await audit(this.db, { actor: "system", kind: "pr.merged", subject: ticket.id, data: { url: ticket.prUrl } });
     return { verdict: "PASS", summary: `Merged ${ticket.prUrl}` };
+  }
+
+  /**
+   * Polls the PR until GitHub's required checks pass on `head` (undefined), and otherwise says
+   * where the ticket goes: a failed check back to the Builder with the job's log, anything
+   * waiting cannot fix (or CI past `ciTimeoutMs`) to the board. Waiting takes no gate slot.
+   */
+  private async waitForCi(ticket: Ticket, prUrl: string, head: string, gh: GithubOps, dispatchId: string, signal: AbortSignal): Promise<StageOutcome | undefined> {
+    const deadline = Date.now() + this.config.ciTimeoutMs;
+    const active = this.active.get(dispatchId);
+    let shown = "";
+    try {
+      for (;;) {
+        const r = mergeReadiness(await gh.prStatus(prUrl), head);
+        if (r.kind === "ready") return undefined;
+        if (r.kind === "blocked") return { verdict: "BLOCKED", summary: `Cannot merge ${prUrl}: ${r.reason}.` };
+        if (r.kind === "failed") {
+          const jobs = await Promise.all(
+            r.failed.map(async (c) => {
+              const log = await gh.failedJobLog(c.link);
+              return [`### ${c.name}: ${c.state.toLowerCase()}`, c.link, log && "```\n" + log + "\n```"].filter(Boolean).join("\n\n");
+            }),
+          );
+          const report = `GitHub's required checks failed on ${head.slice(0, 7)} (${prUrl}).\n\n${jobs.join("\n\n")}`;
+          await audit(this.db, { actor: "system", kind: "pr.checks_failed", subject: ticket.id, data: { url: prUrl, head, failed: r.failed.map((c) => c.name) } });
+          return {
+            verdict: "FAIL",
+            summary: report,
+            artifact: { name: "ci.md", content: report },
+            feedback: `CI failed on the pull request. Fix the cause; the gates and CI run again on your new commits.\n\n${report}`,
+          };
+        }
+        if (Date.now() >= deadline) return { verdict: "BLOCKED", summary: `CI did not finish within ${Math.round(this.config.ciTimeoutMs / 60_000)} minutes: ${r.detail}.` };
+        if (r.detail !== shown) {
+          shown = r.detail;
+          await recordDispatchEvent(this.db, dispatchId, { kind: "text", text: `Waiting for CI on ${head.slice(0, 7)}: ${r.detail}` });
+        }
+        if (active) active.waiting = true;
+        try {
+          await sleep(this.config.ciPollMs, undefined, { signal });
+        } catch {
+          return { verdict: "BLOCKED", summary: "cancelled while waiting for CI" };
+        }
+      }
+    } finally {
+      if (active) active.waiting = false;
+    }
   }
 
   private async latestApproval(ticketId: string, kind: string): Promise<Approval | undefined> {
@@ -887,8 +986,10 @@ export class Factory extends EventEmitter {
     await updateTicket(this.db, ticket.id, { status: "done" });
     await this.cleanup(ticket);
     this.emit("change");
-    void this.digestTicket(ticket.id).catch((err) =>
-      audit(this.db, { actor: "system", kind: "digest.failed", subject: ticket.id, data: { error: (err as Error).message } }),
+    this.track(
+      this.digestTicket(ticket.id).catch((err) =>
+        audit(this.db, { actor: "system", kind: "digest.failed", subject: ticket.id, data: { error: (err as Error).message } }),
+      ),
     );
   }
 
