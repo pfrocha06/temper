@@ -86,3 +86,23 @@ describe("run", () => {
     expect(events.length).toBeGreaterThan(3);
   });
 });
+
+// SEC-03 (#38): canaries in the server's environment never reach the CLI or what it starts.
+describe("agent environment", () => {
+  it("passes the allowlist and the run's variables, never the server's secrets", async () => {
+    const canaries = { GH_TOKEN: "canary-gh", TEMPER_BOARD_TOKEN: "canary-board", JIRA_API_TOKEN: "canary-jira", AWS_SECRET_ACCESS_KEY: "canary-aws" };
+    Object.assign(process.env, canaries);
+    try {
+      const adapter = createClaudeCliAdapter({ bin: process.execPath, binArgs: [join(import.meta.dirname, "fixtures", "fake-claude-env.mjs")] });
+      const result = await adapter.run({ cwd: tmpdir(), prompt: "x", allowedTools: [], disallowedTools: [], env: { TEMPER_APP_URL: "http://127.0.0.1:9" } }, () => {});
+      expect(JSON.parse(result.finalText)).toEqual({ leaked: [], childLeaked: [], hasPath: true, run: "http://127.0.0.1:9" });
+    } finally {
+      for (const k of Object.keys(canaries)) delete process.env[k];
+    }
+  });
+
+  it("refuses a run variable that would load code into every process", async () => {
+    const adapter = createClaudeCliAdapter({ bin: process.execPath, binArgs: [join(import.meta.dirname, "fixtures", "fake-claude-env.mjs")] });
+    await expect(adapter.run({ cwd: tmpdir(), prompt: "x", allowedTools: [], disallowedTools: [], env: { NODE_OPTIONS: "--require /tmp/x.js" } }, () => {})).rejects.toThrow(/may not set NODE_OPTIONS/);
+  });
+});

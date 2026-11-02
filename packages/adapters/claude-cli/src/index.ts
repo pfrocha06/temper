@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import type { AgentAdapter, ModelUsage, RunEvent, RunRequest, RunResult } from "@temper/core";
+import { agentEnv } from "@temper/core/agent-env";
 
 export type ClaudeCliOptions = {
   /** Path to the `claude` binary. */
@@ -12,7 +13,15 @@ export type ClaudeCliOptions = {
   binArgs?: string[];
   /** Directories no run may ever read (Temper's own secrets and database), on top of each request's. */
   alwaysDenyDirs?: string[];
+  /** Server variables to pass on top of the allowlist (TEMPER_AGENT_ENV), e.g. a Bedrock setup's. */
+  passEnv?: string[];
 };
+
+/**
+ * How the CLI may sign in when not through its own stored login: the only server variables a
+ * Claude run gets beyond the base allowlist (see agentEnv).
+ */
+export const CLAUDE_AUTH_ENV = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDE_CONFIG_DIR"];
 
 /**
  * Settings passed to every run. Together with `--setting-sources project` and
@@ -171,7 +180,7 @@ export function createClaudeCliAdapter(options: ClaudeCliOptions = {}): AgentAda
       return new Promise<RunResult>((resolve, reject) => {
         const child = spawn(bin, [...(options.binArgs ?? []), ...buildArgs(req, pluginDir, mcpConfig)], {
           cwd: req.cwd,
-          env: { ...process.env, ...req.env },
+          env: agentEnv([...CLAUDE_AUTH_ENV, ...(options.passEnv ?? [])], req.env),
           stdio: ["ignore", "pipe", "pipe"],
           signal: req.signal,
         });

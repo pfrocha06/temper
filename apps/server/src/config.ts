@@ -22,6 +22,8 @@ export type Config = {
   secretsDir: string;
   /** Sandbox for Builder code the server runs itself (tests, the candidate app). `off` only for development. */
   gateSandbox: SandboxMode;
+  /** Server variables agent CLIs get on top of their allowlist (TEMPER_AGENT_ENV, comma-separated names). */
+  agentEnv: string[];
   /** Extra paths gate commands may read (Windows: per-user tool installs the sandbox account cannot see). */
   gateAllowRead: string[];
 };
@@ -48,6 +50,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     codexHome: env.TEMPER_CODEX_HOME ?? join(home, "secrets", "codex"),
     secretsDir: join(home, "secrets"),
     gateSandbox: env.TEMPER_GATE_SANDBOX === "off" ? "off" : "srt",
+    agentEnv: (env.TEMPER_AGENT_ENV ?? "").split(",").map((s) => s.trim()).filter(Boolean),
     gateAllowRead: (env.TEMPER_GATE_ALLOW_READ ?? "").split(delimiter).filter(Boolean),
   };
 }

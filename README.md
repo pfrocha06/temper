@@ -302,6 +302,7 @@ Install tools machine-wide, or list per-user tool folders in `TEMPER_GATE_ALLOW_
 | `TEMPER_CLAUDE_BIN` | `claude` | Path to the Claude Code CLI |
 | `TEMPER_CODEX_BIN` | `codex` | Path to the Codex CLI |
 | `TEMPER_CODEX_HOME` | `$TEMPER_HOME/secrets/codex` | Temper's own Codex login, kept apart from `~/.codex` |
+| `TEMPER_AGENT_ENV` | | Extra server variables agent CLIs may see, comma-separated (e.g. a Bedrock setup's). Agents otherwise get only a fixed allowlist |
 | `TEMPER_GATE_SANDBOX` | `srt` | `off` runs gate commands unsandboxed; for development only |
 | `TEMPER_GATE_ALLOW_READ` | | Extra folders gate commands may read (Windows), separated like `PATH` |
 | `TEMPER_API_URL` | `http://127.0.0.1:4600` | Where the dev console proxies API calls |
