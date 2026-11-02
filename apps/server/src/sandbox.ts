@@ -77,11 +77,13 @@ const srtCli = () => createRequire(import.meta.url).resolve("@anthropic-ai/sandb
  * - Windows blocks every direct connect, loopback included, so loopback goes through srt's proxy.
  * - Linux has its own network namespace: the only way out is srt's proxy, to the host's relay.
  * `reach` is one port on the host's loopback the command may connect to through the proxy (the
- * candidate app, for the holdouts).
+ * candidate app, for the holdouts). `domains` are hosts it may reach through the proxy (package
+ * registries, for setup commands).
  */
-export function srtNetwork(platform: NodeJS.Platform, relayPort?: number, reach?: number): Record<string, unknown> {
+export function srtNetwork(platform: NodeJS.Platform, relayPort?: number, reach?: number, domains: string[] = []): Record<string, unknown> {
   const allowedDomains = platform === "win32" ? ["localhost", "127.0.0.1"] : relayPort ? [`127.0.0.1:${relayPort}`] : [];
   if (reach && platform !== "win32") allowedDomains.push(`127.0.0.1:${reach}`, `localhost:${reach}`);
+  allowedDomains.push(...domains);
   return { allowedDomains, deniedDomains: [], allowLocalBinding: true };
 }
 
@@ -268,7 +270,7 @@ export async function hostRelay(token: string): Promise<{ relayPort: number; url
 export async function sandboxed(
   sandbox: Sandbox,
   command: string,
-  opts: { cwd: string; allowWrite?: string[]; env?: Record<string, string>; expose?: number; readOnlyCwd?: boolean; reach?: number },
+  opts: { cwd: string; allowWrite?: string[]; env?: Record<string, string>; expose?: number; readOnlyCwd?: boolean; reach?: number; domains?: string[] },
   platform: NodeJS.Platform = process.platform,
 ): Promise<SandboxedCommand> {
   const tmp = mkdtempSync(join(gateScratchRoot(), "temper-gate-tmp-"));
@@ -292,7 +294,7 @@ export async function sandboxed(
   // The settings live outside every writable path, so the command cannot rewrite its own policy.
   const settingsDir = mkdtempSync(join(tmpdir(), "temper-srt-"));
   const settings = join(settingsDir, "srt-settings.json");
-  writeFileSync(settings, JSON.stringify(srtSettings(sandbox, [...(opts.readOnlyCwd ? [] : [opts.cwd]), tmp, ...(opts.allowWrite ?? [])], srtNetwork(platform, relay?.relayPort, opts.reach))), { mode: 0o600 });
+  writeFileSync(settings, JSON.stringify(srtSettings(sandbox, [...(opts.readOnlyCwd ? [] : [opts.cwd]), tmp, ...(opts.allowWrite ?? [])], srtNetwork(platform, relay?.relayPort, opts.reach, opts.domains))), { mode: 0o600 });
   const q = (s: string) => `"${s}"`;
   return {
     file: process.execPath,
