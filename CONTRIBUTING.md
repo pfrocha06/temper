@@ -6,7 +6,8 @@ reproduction, fixes, and work on the items in the [roadmap](https://github.com/p
 ## Before you start
 
 1. Read [CONTEXT.md](CONTEXT.md). Use its words exactly: ticket, stage, dispatch, verdict, holdout, gate.
-2. Skim [docs/design.md](docs/design.md) and the [ADRs](docs/adr).
+2. Skim [ARCHITECTURE.md](ARCHITECTURE.md), [docs/design.md](docs/design.md) and the [ADRs](docs/adr).
+   Working with a coding agent? Point it at [AGENTS.md](AGENTS.md).
 3. For anything bigger than a small fix, open an issue first so we can agree on the approach.
    Roadmap items have a spec in [docs/specs](docs/specs) that names the files it touches, its
    acceptance criteria and what is out of scope.
@@ -32,10 +33,8 @@ need no Codex login.
   behaviour, not implementation.
 - **Never weaken a test to make work pass.** Don't delete assertions or add `.skip` / `.only`.
   Temper's own diff guard rejects these in agent work, and reviewers do the same for humans.
-- **Keep the core company-agnostic.** No employer, customer or internal-tool names in the
-  repository. Company-specific integrations belong in a local profile plugin.
-  `pnpm check:agnostic` enforces it; put your own private patterns in
-  `~/.temper/agnostic-denylist.txt`, which is never committed.
+- **Keep the core generic.** Integrations specific to one organisation (its trackers, SSO,
+  internal tools) belong in a local profile plugin, not in the repository.
 - **Record decisions.** A change to the architecture or to a trade-off an ADR made comes with a
   new or updated ADR in `docs/adr/`.
 - **Close the roadmap issue** from the PR with `Closes #<issue>`; it is a sub-issue of the pinned [Roadmap issue](https://github.com/pfrocha06/temper/issues/24), whose progress bar updates.

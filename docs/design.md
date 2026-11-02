@@ -47,7 +47,7 @@ Everything else runs without the human.
 A **profile** binds an identity: agent adapters + accounts, git host credentials, issue
 trackers, target repositories, plugins. A profile only dispatches to its own adapters and
 repos. Company-specific integrations are profile plugins kept in local config, never in this
-repository (`pnpm check:agnostic` enforces it).
+repository.
 
 ## Agents
 

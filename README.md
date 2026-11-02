@@ -129,7 +129,7 @@ Run it again to update. Read it first if you like: [install.sh](install.sh), [in
 git clone https://github.com/pfrocha06/temper.git
 cd temper
 pnpm install
-pnpm check      # tests, typecheck and the company-agnostic check
+pnpm check      # typecheck and tests
 pnpm dev        # console on http://localhost:5173, server on :4610, with its own data
 ```
 
