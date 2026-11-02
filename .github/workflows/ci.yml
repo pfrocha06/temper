@@ -38,6 +38,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           pnpm --filter @temper/server exec srt windows-install
+          pnpm --filter @temper/server exec node ../../scripts/warm-windows-sandbox.mjs
           echo TEMPER_TEST_SRT=1 >> "$GITHUB_ENV"
 
       # The Codex adapter's permission profile, enforced by Codex's own sandbox (no login needed).
