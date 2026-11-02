@@ -26,7 +26,7 @@ import { useAppActions } from "@/hooks/use-app-actions";
 import { useArrivals } from "@/hooks/use-arrivals";
 import { useNow } from "@/hooks/use-now";
 import { useProject } from "@/hooks/use-project";
-import { groupByStatus } from "@/lib/board";
+import { filterTickets, groupByStatus } from "@/lib/board";
 import { STATUS_LABEL } from "@/lib/constants";
 import { derivePipeline, dispatchesByTicket } from "@/lib/pipeline";
 import { dispatchesQuery, statusQuery, ticketsQuery, useStartTicket } from "@/lib/queries";
@@ -34,6 +34,7 @@ import type { Ticket, TicketStatus } from "@/lib/types";
 import { ActivityStrip } from "./activity-strip";
 import { BoardColumn } from "./board-column";
 import { canDrop, liveFor } from "./board-model";
+import { SourceFilter } from "./source-filter";
 import { TicketCard } from "./ticket-card";
 import { TicketSheet } from "./ticket-sheet";
 
@@ -66,7 +67,21 @@ export function BoardPage() {
 
   const ticketList = tickets.data;
   const dispatchList = dispatches.data ?? NO_DISPATCHES;
-  const columns = useMemo(() => groupByStatus(ticketList ?? []), [ticketList]);
+  const source = params.get("source") ?? undefined;
+  const issue = (source && params.get("issue")) || undefined;
+  const shown = useMemo(() => filterTickets(ticketList ?? [], { source, issue }), [ticketList, source, issue]);
+  const columns = useMemo(() => groupByStatus(shown), [shown]);
+  const setFilter = useCallback(
+    (next: { source?: string; issue?: string }) =>
+      setParams((p) => {
+        for (const k of ["source", "issue"] as const) {
+          if (next[k]) p.set(k, next[k]!);
+          else p.delete(k);
+        }
+        return p;
+      }),
+    [setParams],
+  );
   const pipelines = useMemo(() => {
     const byTicket = dispatchesByTicket(dispatchList);
     return new Map((ticketList ?? []).map((t) => [t.id, derivePipeline(t, byTicket.get(t.id) ?? [])]));
@@ -103,6 +118,7 @@ export function BoardPage() {
   };
 
   const total = ticketList?.length ?? 0;
+  const filtered = shown.length !== total;
   const counts = Object.fromEntries(columns.map((c) => [c.status, c.tickets.length])) as Record<TicketStatus, number>;
 
   return (
@@ -113,7 +129,7 @@ export function BoardPage() {
         meta={
           project ? (
             <>
-              <span className="tabular-nums">{total} tickets</span>
+              <span className="tabular-nums">{filtered ? `${shown.length} of ${total} tickets` : `${total} tickets`}</span>
               {counts.awaiting_board > 0 ? <span className="font-medium text-board tabular-nums">{counts.awaiting_board} need you</span> : null}
             </>
           ) : null
@@ -138,6 +154,7 @@ export function BoardPage() {
           </>
         }
       />
+      {ticketList ? <SourceFilter tickets={ticketList} source={source} issue={issue} onChange={setFilter} /> : null}
       <ActivityStrip status={status.data} dispatches={dispatchList} ticketById={ticketById} />
       <div className="min-h-0 flex-1 p-3 md:px-6 md:py-4">
         {tickets.isError ? (
