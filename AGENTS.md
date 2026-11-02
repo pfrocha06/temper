@@ -18,7 +18,7 @@ when Temper works on itself.
 
 ```sh
 pnpm install
-pnpm check                         # agnostic check + typecheck + every test; must pass before a PR
+pnpm check                         # typecheck + every test; must pass before a PR
 pnpm --filter @temper/server test  # one package (also @temper/core, @temper/web, @temper/plugin-jira, …)
 pnpm --filter @temper/server exec vitest run test/intake.test.ts   # one file
 pnpm dev                           # dev instance: server on :4610, web on :5173
@@ -30,9 +30,9 @@ If `pnpm` is not on PATH (Git Bash on Windows, for example), use `corepack pnpm`
 
 1. **Test first.** A failing test for the behaviour, then the code. Never weaken a test to make
    work pass: no deleted assertions, no `.skip` or `.only`. The diff guard rejects these.
-2. **No company names.** No employer, customer or internal-tool names, site URLs or tokens anywhere
-   in the repository, including tests, fixtures and commit messages. `pnpm check:agnostic` enforces
-   it with a private denylist in `~/.temper/agnostic-denylist.txt`.
+2. **Keep the core generic.** Integrations specific to one organisation (its trackers, SSO,
+   internal tools) are profile plugins kept in local config, not code here. No real site URLs or
+   tokens in the repository, including tests and fixtures.
 3. **Erasable TypeScript only.** The server runs with plain `node`, which strips types and nothing
    more (`erasableSyntaxOnly` in `tsconfig.base.json`). No parameter properties
    (`constructor(private db: Db)`), no `enum`, no `namespace`. Relative imports keep their `.ts`

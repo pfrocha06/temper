@@ -33,10 +33,8 @@ need no Codex login.
   behaviour, not implementation.
 - **Never weaken a test to make work pass.** Don't delete assertions or add `.skip` / `.only`.
   Temper's own diff guard rejects these in agent work, and reviewers do the same for humans.
-- **Keep the core company-agnostic.** No employer, customer or internal-tool names in the
-  repository. Company-specific integrations belong in a local profile plugin.
-  `pnpm check:agnostic` enforces it; put your own private patterns in
-  `~/.temper/agnostic-denylist.txt`, which is never committed.
+- **Keep the core generic.** Integrations specific to one organisation (its trackers, SSO,
+  internal tools) belong in a local profile plugin, not in the repository.
 - **Record decisions.** A change to the architecture or to a trade-off an ADR made comes with a
   new or updated ADR in `docs/adr/`.
 - **Close the roadmap issue** from the PR with `Closes #<issue>`; it is a sub-issue of the pinned [Roadmap issue](https://github.com/pfrocha06/temper/issues/24), whose progress bar updates.

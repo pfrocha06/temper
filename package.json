@@ -10,9 +10,8 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r --workspace-concurrency=1 test",
-    "check:agnostic": "node scripts/check-agnostic.mjs",
     "vendor:skills": "node scripts/vendor-skills.mjs",
-    "check": "pnpm check:agnostic && pnpm typecheck && pnpm test",
+    "check": "pnpm typecheck && pnpm test",
     "dev": "TEMPER_INSTANCE=dev TEMPER_PORT=4610 TEMPER_API_URL=http://127.0.0.1:4610 pnpm --parallel --filter @temper/server --filter @temper/web dev"
   },
   "license": "MIT",
