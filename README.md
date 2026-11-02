@@ -276,7 +276,7 @@ Three ways to add checks:
 |---|:---:|:---:|:---:|
 | Server, console and CLI | ✅ | ✅ | ✅ |
 | Gate sandbox (setup, Builder tests, candidate app, holdouts) | ✅ built in | ✅ `bubblewrap`, `socat`, `ripgrep` ¹ | ✅ alpha, one-time setup ² |
-| Background service (`temper start`) | ✅ launchd | run `temper serve` under your own service manager | run `temper serve` under your own service manager |
+| Background service (`temper start`) | ✅ launchd | ✅ systemd; without it, run `temper serve` under your own service manager | run `temper serve` under your own service manager |
 | Agent runs sandboxed (by the `claude` CLI) | ✅ | ✅ | check with `probe-isolation` |
 | Agent runs sandboxed (by the `codex` CLI) | ✅ | ✅ | ✅ needs `temper codex setup`; no network, so keep the Verifier on Claude |
 
