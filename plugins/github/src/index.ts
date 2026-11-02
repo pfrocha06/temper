@@ -97,5 +97,5 @@ export async function prState(url: string): Promise<PullRequest> {
   return JSON.parse(stdout) as PullRequest;
 }
 
-export { ghIssues, repoFromRemote, TRUSTED_ASSOCIATIONS } from "./issues.ts";
-export type { GithubIssue, IssueSource } from "./issues.ts";
+export { ghIssues, ghRepoFilters, repoFromRemote, searchTerm, TRUSTED_ASSOCIATIONS } from "./issues.ts";
+export type { GithubIssue, IssueSource, RepoFilters, RepoLabel, RepoMilestone } from "./issues.ts";

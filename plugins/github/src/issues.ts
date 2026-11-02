@@ -72,6 +72,32 @@ export const ghIssues: IssueSource = {
   },
 };
 
+export type RepoLabel = { name: string; color: string; description: string };
+export type RepoMilestone = { number: number; title: string };
+
+/** What a repository's issues can be filtered by, for the console's import picker. */
+export type RepoFilters = {
+  labels(repo: string): Promise<RepoLabel[]>;
+  milestones(repo: string): Promise<RepoMilestone[]>;
+};
+
+export const ghRepoFilters: RepoFilters = {
+  async labels(repo) {
+    const r = await api<Array<{ name: string; color?: string; description?: string | null }>>(`repos/${repo}/labels`, { per_page: "100" });
+    return r.map((l) => ({ name: l.name, color: l.color ?? "", description: l.description ?? "" }));
+  },
+  async milestones(repo) {
+    const r = await api<Array<{ number: number; title: string }>>(`repos/${repo}/milestones`, { state: "open", per_page: "100" });
+    return r.map((m) => ({ number: m.number, title: m.title }));
+  },
+};
+
+/** A value inside GitHub search syntax (`label:"…"`): quotes cannot be escaped there, so they are refused. */
+export function searchTerm(qualifier: string, value: string): string {
+  if (/["\r\n]/.test(value)) throw new Error(`${qualifier} "${value}" cannot be searched: it contains a quote or newline`);
+  return `${qualifier}:"${value}"`;
+}
+
 const HOST = "github.com";
 const NAME = /^[\w.-]+$/;
 

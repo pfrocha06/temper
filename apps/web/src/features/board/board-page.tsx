@@ -12,7 +12,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRightIcon, FileInputIcon, FolderGit2Icon, PlusIcon } from "lucide-react";
+import { ChevronRightIcon, FileInputIcon, FolderGit2Icon, ListPlusIcon, PlusIcon } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { toast } from "sonner";
@@ -120,6 +120,11 @@ export function BoardPage() {
         }
         actions={
           <>
+            <Button variant="outline" size="sm" onClick={() => show("import-issues")} disabled={!project}>
+              <ListPlusIcon data-icon="inline-start" />
+              Import issues
+              <Kbd className="ml-1 max-md:hidden">E</Kbd>
+            </Button>
             <Button variant="outline" size="sm" onClick={() => show("import-spec")} disabled={!project}>
               <FileInputIcon data-icon="inline-start" />
               Import spec

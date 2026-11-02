@@ -30,6 +30,24 @@ async function call(path: string, init?: RequestInit): Promise<unknown> {
 
 const log = (s: string) => console.log(s);
 
+type ImportResult = { key: string; status: string; ticketIds: string[]; reason?: string; existingTicketId?: string };
+const logImport = (r: ImportResult) => {
+  if (r.status === "skipped") log(`${r.key}  skipped: ${r.reason ?? `already linked to open ticket ${r.existingTicketId}`}`);
+  else for (const id of r.ticketIds) log(`${r.key}  ${id}`);
+};
+
+/** Search the tracker, then import each match in its own request. Returns how many matched. */
+async function importEach(projectId: string, query: Record<string, unknown> & { source: "github" | "jira" }, opts: { start: boolean; anyAuthor?: boolean }): Promise<number> {
+  const { candidates } = (await call("/intake/search", { method: "POST", body: JSON.stringify({ ...query, limit: 100 }) })) as {
+    candidates: Array<{ key: string; title: string; ticketId?: string }>;
+  };
+  for (const [i, c] of candidates.entries()) {
+    console.error(`[${i + 1}/${candidates.length}] ${c.key}  ${c.title}`);
+    logImport((await call("/intake/import", { method: "POST", body: JSON.stringify({ projectId, source: query.source, key: c.key, ...opts }) })) as ImportResult);
+  }
+  return candidates.length;
+}
+
 async function deploy(ref: string, source: string) {
   const tag = await buildRelease(config.home, source, ref, log);
   const before = readState(config.home);
@@ -204,15 +222,18 @@ switch (command) {
     if (!values.project || !!values.issue === !!values.search) throw new Error('usage: temper import-github --project ID (--issue N | --search "…") [--repo OWNER/NAME] [--start] [--any-author]');
     const issue = values.issue ? Number(values.issue.replace(/^#/, "")) : undefined;
     if (issue !== undefined && !Number.isInteger(issue)) throw new Error(`not an issue number: ${values.issue}`);
+    if (values.search && !values.repo) {
+      // Search, then one request per issue: a batch can take longer than one HTTP request may wait.
+      const n = await importEach(values.project, { source: "github", projectId: values.project, query: values.search }, { start: values.start, anyAuthor: values["any-author"] });
+      if (!n) log("no matching open issues");
+      break;
+    }
     const { results } = (await call("/github/import", {
       method: "POST",
       body: JSON.stringify({ projectId: values.project, issue, search: values.search, repo: values.repo, start: values.start, anyAuthor: values["any-author"] }),
-    })) as { results: Array<{ key: string; status: string; ticketIds: string[]; reason?: string }> };
+    })) as { results: ImportResult[] };
     if (!results.length) log("no matching open issues");
-    for (const r of results) {
-      if (r.status === "skipped") log(`${r.key}  skipped: ${r.reason}`);
-      else for (const id of r.ticketIds) log(`${r.key}  ${id}`);
-    }
+    results.forEach(logImport);
     break;
   }
   case "import-jira": {
@@ -221,14 +242,15 @@ switch (command) {
       options: { project: { type: "string" }, issue: { type: "string" }, jql: { type: "string" }, start: { type: "boolean", default: false } },
     });
     if (!values.project || !!values.issue === !!values.jql) throw new Error('usage: temper import-jira --project ID (--issue KEY | --jql "…") [--start]');
-    const { results } = (await call("/jira/import", { method: "POST", body: JSON.stringify({ projectId: values.project, issue: values.issue, jql: values.jql, start: values.start }) })) as {
-      results: Array<{ key: string; status: string; ticketIds: string[]; existingTicketId?: string }>;
-    };
-    if (!results.length) log("no matching issues");
-    for (const r of results) {
-      if (r.status === "skipped") log(`${r.key}  skipped: already linked to open ticket ${r.existingTicketId}`);
-      else for (const id of r.ticketIds) log(`${r.key}  ${id}`);
+    if (values.jql) {
+      const n = await importEach(values.project, { source: "jira", projectId: values.project, jql: values.jql }, { start: values.start });
+      if (!n) log("no matching issues");
+      break;
     }
+    const { results } = (await call("/jira/import", { method: "POST", body: JSON.stringify({ projectId: values.project, issue: values.issue, start: values.start }) })) as {
+      results: ImportResult[];
+    };
+    results.forEach(logImport);
     break;
   }
   case "probe-isolation": {

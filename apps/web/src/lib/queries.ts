@@ -11,6 +11,13 @@ import type {
   DispatchEvent,
   Environment,
   FactoryStatus,
+  GithubFilters,
+  IntakeCandidate,
+  IntakeImportResult,
+  IntakeQuery,
+  IntakeSourceId,
+  IntakeSources,
+  JiraFilters,
   KnowledgeDetail,
   KnowledgeEntry,
   KnowledgeInput,
@@ -166,6 +173,30 @@ export const useImportSpec = () =>
     (input: { projectId: string; title: string; markdown: string; autoStart: boolean }) => post<Ticket[]>("/specs/import", input),
     [keys.tickets],
   );
+
+/** Issue intake: which trackers the project can import from, and what each can be filtered by. */
+export const intakeSourcesQuery = (projectId: string) =>
+  queryOptions({ queryKey: ["intake", "sources", projectId], queryFn: () => api<IntakeSources>(`/intake/sources?projectId=${enc(projectId)}`), staleTime: 60_000 });
+export const githubFiltersQuery = (projectId: string, enabled: boolean) =>
+  queryOptions({
+    queryKey: ["intake", "github", projectId],
+    queryFn: () => api<GithubFilters>(`/intake/github/filters?projectId=${enc(projectId)}`),
+    enabled,
+    staleTime: 5 * 60_000,
+  });
+export const jiraFiltersQuery = (project: string, enabled: boolean) =>
+  queryOptions({
+    queryKey: ["intake", "jira", project],
+    queryFn: () => api<JiraFilters>(`/intake/jira/filters${project ? `?project=${enc(project)}` : ""}`),
+    enabled,
+    staleTime: 5 * 60_000,
+    placeholderData: (prev) => prev,
+  });
+export const useIntakeSearch = () =>
+  useMutation({ mutationFn: (q: IntakeQuery) => post<{ candidates: IntakeCandidate[] }>("/intake/search", q).then((r) => r.candidates) });
+/** One issue per request: the Chief takes a minute or so on each, and a batch would outlast one HTTP request. */
+export const importIssue = (input: { projectId: string; source: IntakeSourceId; key: string; start: boolean; anyAuthor: boolean }) =>
+  post<IntakeImportResult>("/intake/import", input);
 
 export const useStartTicket = () => useInvalidating((id: string) => post<Ticket>(`/tickets/${encodeURIComponent(id)}/start`), [keys.tickets, ["ticket"]]);
 
