@@ -9,6 +9,7 @@ import {
   claimTicket,
   createDispatch,
   createTicket,
+  openTicketsByRef,
   dispatchableTickets,
   finishDispatch,
   getAgent,
@@ -69,6 +70,7 @@ import type { Sandbox } from "./sandbox.ts";
 import { diffGuard } from "./gates/diff-guard.ts";
 import { builderFeedback as holdoutFeedback, parseHoldoutResults } from "./gates/holdout-results.ts";
 import { runShell } from "./exec.ts";
+import { issueLine } from "./github-import.ts";
 import { runChecks } from "./gates/run.ts";
 import {
   changedBetween,
@@ -740,6 +742,9 @@ export class Factory extends EventEmitter {
           gates: arts.get("gates.md"),
           filesChanged: changes.length,
           areas,
+          issue: ticket.externalRef
+            ? issueLine(ticket.externalRef, (await openTicketsByRef(this.db, ticket.externalRef.tracker, ticket.externalRef.key)).filter((t) => t.id !== ticket.id).length)
+            : undefined,
         }),
       });
       ticket = await updateTicket(this.db, ticket.id, { prUrl: pr.url });

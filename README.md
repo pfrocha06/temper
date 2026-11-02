@@ -165,6 +165,26 @@ temper import-spec --project <id> --file spec.md --start
 `temper rollback` returns to the previous release and `temper pause` stops new work.
 `temper help` lists every command.
 
+### Work intake
+
+Work reaches the factory as a spec, which the Chief of Staff splits into tickets:
+
+```sh
+temper import-spec   --project <id> --file spec.md --start          # a Markdown spec
+temper import-github --project <id> --search "label:roadmap" --start  # GitHub issues
+temper import-github --project <id> --issue 42                        # one issue
+temper import-jira   --project <id> --jql "project = APP AND status = 'To Do'"
+```
+
+GitHub issues come from the project's own repository (or `--repo owner/name`), through the
+`gh` account the profile pins. Each ticket links back to its issue, an issue already in progress is
+skipped, and the PR says `Closes owner/name#42`, so merging closes the issue. On a public
+repository anyone can open an issue, and its text becomes instructions for your agents: only issues
+by people who can push to the repository are imported, unless you read one and pass `--any-author`.
+
+Temper works on its own roadmap the same way: register this repository as a project, then
+`temper import-github --project <id> --search "label:roadmap"`.
+
 ### Codex as a second vendor
 
 With every role on one vendor, the Builder's work and its proof share blind spots. Put the
