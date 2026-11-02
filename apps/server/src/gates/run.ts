@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import type { GateCheck, Project, RunEvent, Ticket, Verdict } from "@temper/core";
 import { bootApp } from "../app-runner.ts";
-import { run, runSandboxed, runShell } from "../exec.ts";
-import type { Sandbox } from "../sandbox.ts";
+import { run, runSandboxed } from "../exec.ts";
+import { nodeModulesDirs, type Sandbox } from "../sandbox.ts";
 import { changedFiles, commitsAhead, diff, hasUncommittedChanges, headSha } from "../git.ts";
 import { diffGuard, isTestFile } from "./diff-guard.ts";
 import { builderFeedback, parseHoldoutResults } from "./holdout-results.ts";
@@ -17,6 +17,12 @@ export type GateContext = {
   worktree: string;
   /** Confines the Builder's code (the test command, the candidate app). */
   sandbox: Sandbox;
+  /**
+   * Confines the holdouts (Verifier-written code): reads the candidate and the holdouts, never
+   * Temper's secrets, other worktrees or the user's credentials; writes only its temp dir; reaches
+   * only the candidate app. Required: without it the holdouts check fails.
+   */
+  holdoutsSandbox?: Sandbox;
   /** Merged tickets whose holdouts run as regression checks. */
   regressionTickets?: string[];
   signal?: AbortSignal;
@@ -82,12 +88,42 @@ export async function holdouts(ctx: GateContext): Promise<CheckResult> {
   if (!project.holdoutsPath || !project.holdoutsCommand) {
     return { check: "holdouts", ok: false, report: "Holdouts are not configured for this project (holdoutsPath and holdoutsCommand)." };
   }
+  // The holdouts are Verifier-written code: they run confined like the Builder's, never on the host.
+  if (!ctx.holdoutsSandbox) {
+    return { check: "holdouts", ok: false, report: "No sandbox for the holdouts: they never run unconfined. This is a Temper bug; the gate did not pass." };
+  }
+  // On Windows srt runs every sandboxed command as one account, and its rules are that account's
+  // ACLs: while the candidate app runs denied the holdouts, the holdouts cannot read themselves,
+  // and granting them would let the app read them too. So no holdouts run against a sandboxed app
+  // there; Linux and macOS confine each command separately.
+  if (process.platform === "win32" && ctx.holdoutsSandbox.mode === "srt" && project.appCommand) {
+    return {
+      check: "holdouts",
+      ok: false,
+      report: "On Windows the holdouts cannot run against the candidate app in the sandbox: srt runs both as one account, so the app would be able to read the holdouts. Run this project's factory on Linux, macOS or WSL.",
+    };
+  }
   let app: Awaited<ReturnType<typeof bootApp>> | undefined;
   try {
     if (project.appCommand) app = await bootApp(project.appCommand, ctx.worktree, project.appHealthPath, ctx.sandbox);
-    const r = await runShell(project.holdoutsCommand, {
+    const reach = app ? Number(new URL(app.url).port) : undefined;
+    // A Linux sandbox has its own network namespace: holdouts tunnel to the app through srt's proxy,
+    // as they do in the Verifier's sandbox (see the holdouts template's lib/proxy.mjs).
+    const viaProxy = Boolean(app) && ctx.holdoutsSandbox.mode === "srt" && process.platform === "linux";
+    const r = await runSandboxed(project.holdoutsCommand, ctx.holdoutsSandbox, {
       cwd: project.holdoutsPath,
-      env: { ...process.env, TEMPER_APP_URL: app?.url ?? "", TEMPER_APP_TOKEN: app?.token ?? "", TEMPER_CANDIDATE_PATH: ctx.worktree, TEMPER_TICKET_ID: ctx.ticket.id, TEMPER_REGRESSION_TICKETS: (ctx.regressionTickets ?? []).join(",") },
+      readOnlyCwd: true,
+      // The candidate's source stays read-only; its test tools' caches (node_modules/.vite, …) do not.
+      allowWrite: nodeModulesDirs(ctx.worktree),
+      reach,
+      env: {
+        TEMPER_APP_URL: app?.url ?? "",
+        TEMPER_APP_TOKEN: app?.token ?? "",
+        ...(viaProxy ? { TEMPER_APP_VIA_PROXY: "1" } : {}),
+        TEMPER_CANDIDATE_PATH: ctx.worktree,
+        TEMPER_TICKET_ID: ctx.ticket.id,
+        TEMPER_REGRESSION_TICKETS: (ctx.regressionTickets ?? []).join(","),
+      },
       signal: ctx.signal,
       timeoutMs: 20 * 60_000,
       onOutput: ctx.onOutput,

@@ -10,6 +10,7 @@ import { createApi } from "../src/api.ts";
 import { loadConfig } from "../src/config.ts";
 import type { Factory } from "../src/factory.ts";
 import { defaultHoldoutsPath, initHoldouts } from "../src/holdouts.ts";
+import { windowsGateRoot } from "../src/sandbox.ts";
 
 const root = join(import.meta.dirname, "../../..");
 const template = join(root, "templates", "holdouts");
@@ -59,8 +60,14 @@ describe("starter holdouts", () => {
   });
 
   it("names the default folder after the project", () => {
-    expect(defaultHoldoutsPath("/h", "My App!")).toBe(join("/h", "holdouts", "my-app"));
-    expect(defaultHoldoutsPath("/h", "???")).toBe(join("/h", "holdouts", "project"));
+    expect(defaultHoldoutsPath(join("/h", "holdouts"), "My App!")).toBe(join("/h", "holdouts", "my-app"));
+    expect(defaultHoldoutsPath(join("/h", "holdouts"), "???")).toBe(join("/h", "holdouts", "project"));
+  });
+
+  it("keeps them in Temper's home, or on Windows where srt's sandbox account can read them", () => {
+    const root = loadConfig({ TEMPER_HOME: "/h" }).holdoutsRoot;
+    expect(root).toBe(process.platform === "win32" ? join(windowsGateRoot(), "holdouts") : join("/h", "holdouts"));
+    expect(loadConfig({ TEMPER_HOME: "/h", TEMPER_HOLDOUTS_ROOT: "/elsewhere" }).holdoutsRoot).toBe("/elsewhere");
   });
 });
 
@@ -75,7 +82,7 @@ describe("POST /api/projects", () => {
   afterEach(() => close());
 
   it("gives a project without a holdouts folder one Temper keeps", async () => {
-    const app = createApi(db, {} as Factory, { ...loadConfig({ TEMPER_HOME: home }), appRoot: root });
+    const app = createApi(db, {} as Factory, { ...loadConfig({ TEMPER_HOME: home, TEMPER_HOLDOUTS_ROOT: join(home, "holdouts") }), appRoot: root });
     const res = await app.request("/api/projects", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Shop", repoPath: "/code/shop" }) });
     expect(res.status).toBe(201);
     const project = (await res.json()) as { holdoutsPath: string; holdoutsCommand: string };

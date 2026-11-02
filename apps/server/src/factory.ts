@@ -2,7 +2,8 @@ import { spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join, relative } from "node:path";
+import { homedir } from "node:os";
 import { and, desc, eq } from "drizzle-orm";
 import {
   audit,
@@ -66,7 +67,7 @@ import { createPullRequest, deleteRemoteBranch, mergePullRequest, prBody, prStat
 import { bootApp } from "./app-runner.ts";
 import { protectedDirs, type Config } from "./config.ts";
 import { probeGateIsolation, type GateProbeResult } from "./probe.ts";
-import type { Sandbox } from "./sandbox.ts";
+import { personalSecretDirs, windowsGateRoot, type Sandbox } from "./sandbox.ts";
 import { diffGuard } from "./gates/diff-guard.ts";
 import { builderFeedback as holdoutFeedback, parseHoldoutResults } from "./gates/holdout-results.ts";
 import { runShell } from "./exec.ts";
@@ -121,6 +122,12 @@ export const AGENT_ENV: Record<string, string> = {
   GIT_CONFIG_VALUE_1: "false",
 };
 const MAX_GATE_CONCURRENCY = 2;
+
+/** Whether `path` is `dir` or inside it (case-insensitively on Windows). */
+function isInside(dir: string, path: string): boolean {
+  const rel = relative(process.platform === "win32" ? dir.toLowerCase() : dir, process.platform === "win32" ? path.toLowerCase() : path);
+  return !rel.startsWith("..") && !isAbsolute(rel);
+}
 
 /** Base ref for worktrees and diffs: the remote branch when there is a remote. */
 export const baseRef = (p: Project) => (p.remoteUrl ? `origin/${p.defaultBranch}` : p.defaultBranch);
@@ -290,13 +297,37 @@ export class Factory extends EventEmitter {
     const sandbox: Sandbox = {
       mode: this.config.gateSandbox,
       allowRead: this.config.gateAllowRead,
-      denyRead: [...protectedDirs(this.config), ...(project.holdoutsPath ? [project.holdoutsPath] : [])],
+      denyRead: [...protectedDirs(this.config), ...personalSecretDirs(), ...(project.holdoutsPath ? [project.holdoutsPath] : [])],
     };
     if (sandbox.mode === "off") return sandbox;
     this.gateProbe ??= this.probeGateSandbox();
     const probe = await this.gateProbe;
     if (!probe.isolated) throw new Error(`the gate sandbox failed its isolation probe: ${probe.problems.join("; ")}`);
     return sandbox;
+  }
+
+  /**
+   * The sandbox for one gate run's holdouts (Verifier-written code, SEC-01). Same isolation as the
+   * Builder's code, gated by the same probe, but the other way round on what it may read: the
+   * holdouts and this ticket's candidate, never another ticket's worktree. Holdouts run read-only
+   * and reach only the candidate app (see the holdouts check).
+   */
+  private async holdoutsSandboxFor(project: Project, worktree: string): Promise<Sandbox> {
+    const builder = await this.sandboxFor(project);
+    const inProfile = project.holdoutsPath && process.platform === "win32" && builder.mode === "srt" && isInside(homedir(), project.holdoutsPath);
+    if (inProfile) {
+      throw new Error(
+        `the holdouts folder ${project.holdoutsPath} is inside your user profile, which the sandbox account that runs them on Windows cannot read. ` +
+          `Move it under ${windowsGateRoot()} and update the project's holdouts path; holdouts never run outside the sandbox.`,
+      );
+    }
+    return {
+      mode: builder.mode,
+      denyRead: [...protectedDirs(this.config), ...personalSecretDirs(), this.config.worktreesDir],
+      // allowRead re-opens paths inside a denied one; on Windows it also grants the sandbox account
+      // read access to the holdouts, which may live in the user's profile.
+      allowRead: [...(builder.allowRead ?? []), worktree, ...(project.holdoutsPath ? [project.holdoutsPath] : [])],
+    };
   }
 
   private async probeGateSandbox(): Promise<GateProbeResult> {
@@ -704,6 +735,7 @@ export class Factory extends EventEmitter {
         ticket,
         worktree,
         sandbox: await this.sandboxFor(project),
+        holdoutsSandbox: stage.checks.includes("holdouts") ? await this.holdoutsSandboxFor(project, worktree) : undefined,
         regressionTickets: await this.regressionTickets(project.id),
         signal,
         onEvent,
