@@ -31,7 +31,7 @@ itself with `temper import-spec`, or handed to the Chief of Staff in a conversat
 
 ## Built
 
-Ticket workflows with verdict routing · four isolated agent roles plus the Chief of Staff ·
+Ticket workflows with verdict routing · three isolated pipeline roles (Builder, Verifier, Reviewer) plus the Chief of Staff ·
 heartbeat scheduler · worktrees with server-side setup · gates (tests, diff guard, secret
 scan, holdouts incl. browser UI checks, regressions of merged tickets) · separate holdouts repo
 with isolation probe · server-only PRs and merges · board inbox · temperature (shadow mode) ·

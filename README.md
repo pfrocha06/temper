@@ -48,7 +48,7 @@ opposite assumption, and enforces it in the server rather than in prompts.
 - **Ticket workflows as code.** Nine ticket types (feature, bugfix, refactor, investigation, perf, …),
   each a YAML graph of stages in [`workflows/`](workflows). Every stage ends in
   `VERDICT: PASS | FAIL | BLOCKED`; loops are capped and anything stuck lands in your inbox.
-- **Four isolated roles plus a Chief of Staff.** Every run is a fresh session with only the
+- **Three isolated pipeline roles plus a Chief of Staff.** Every run is a fresh session with only the
   skills, instructions and MCP servers its role is assigned. Your own agent settings never leak in.
 - **Hard gates.** Builder tests, holdouts against the running app (API and browser checks), a diff
   guard that rejects weakened or skipped tests and out-of-scope edits, and a secret scan.
