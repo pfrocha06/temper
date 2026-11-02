@@ -164,8 +164,14 @@ temper import-spec --project <id> --file spec.md --start
 
 `temper rollback` returns to the previous release and `temper pause` stops new work.
 
-**Updates.** The main instance fetches its checkout's `origin` every 30 minutes. When `main` has
-new commits, the console's top bar shows **Update · N** with the list of commits. **Update now**
+**Versions.** A release is a `vX.Y.Z` tag on `main` with a GitHub Release. To cut one, open
+Actions › **release** › Run workflow and pick patch, minor or major. The workflow refuses unless CI
+already passed on that commit on every platform. The console shows the running version next to
+the name, for example `v0.2.0`, or `v0.2.0+3` for three commits past it.
+
+**Updates.** The main instance fetches its checkout's `origin` every 30 minutes. When a newer
+release exists, the console's top bar shows **Update to vX.Y.Z** with its commits and release
+notes. Set `TEMPER_UPDATE_CHANNEL=main` to follow every merge to `main` instead. **Update now**
 runs `temper deploy --when-idle` outside the service:
 
 1. Builds the new commit and runs the full check, while Temper keeps working.
@@ -174,6 +180,7 @@ runs `temper deploy --when-idle` outside the service:
 4. Rolls back if the new release fails its health check.
 
 The log is in `~/.temper/logs/update.log`. Set `TEMPER_UPDATE_CHECK=0` to turn checks off.
+
 `temper help` lists every command.
 
 ### Work intake

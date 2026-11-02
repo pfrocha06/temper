@@ -4,6 +4,8 @@ import { updatePhase } from "./update-phase";
 
 const s = (over: Partial<UpdateStatus> = {}): UpdateStatus => ({
   current: "aaa",
+  version: "v0.1.0",
+  channel: "releases",
   branch: "main",
   latest: "bbb",
   behind: 2,

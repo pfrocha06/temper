@@ -3,7 +3,7 @@ import { BookOpenIcon, BotIcon, ChartColumnIcon, CrownIcon, GaugeIcon, InboxIcon
 import { NavLink } from "react-router";
 import { cn } from "cn";
 import { Kbd } from "@/components/ui/kbd";
-import { statusQuery } from "@/lib/queries";
+import { statusQuery, updateQuery } from "@/lib/queries";
 import { ThemeSwitch } from "./theme-switch";
 
 type NavItem = { to: string; label: string; icon: LucideIcon; key: string };
@@ -32,11 +32,17 @@ export const SETTINGS_PAGES: Array<{ to: string; label: string; icon: LucideIcon
 export function NavRail() {
   const { data: status } = useQuery(statusQuery);
   const pending = status?.pendingApprovals ?? 0;
+  const version = useQuery(updateQuery(false)).data?.version;
   return (
     <nav aria-label="Main" className="flex shrink-0 flex-col border-r bg-rail md:w-52 max-md:border-r-0 max-md:border-b">
       <div className="flex h-12 items-center gap-2 px-4 max-md:hidden">
         <TemperMark />
         <span className="text-[0.9375rem] font-semibold tracking-tight">Temper</span>
+        {version ? (
+          <span className="ml-auto truncate font-mono text-xs text-muted-foreground" title={`Running ${version}`}>
+            {version.replace(/^(v[\d.]+)-(\d+)-g[0-9a-f]+$/, "$1+$2")}
+          </span>
+        ) : null}
       </div>
       <ul className="flex gap-0.5 px-2 md:flex-col max-md:overflow-x-auto max-md:py-1.5 max-md:[scrollbar-width:none]">
         {NAV.map((item) => (

@@ -1,0 +1,65 @@
+name: release
+# Actions › release › Run workflow: tags main's head as the next version and publishes a GitHub
+# Release with generated notes. Running Temper installs follow these tags (see updates.ts).
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Which part of the version to raise
+        type: choice
+        options: [patch, minor, major]
+        default: minor
+permissions:
+  contents: write
+  checks: read
+concurrency: release
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Next version
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          latest=$(git tag -l 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+          IFS=. read -r major minor patch <<< "${latest#v}"
+          major=${major:-0}; minor=${minor:-0}; patch=${patch:-0}
+          case "$BUMP" in
+            major) major=$((major + 1)); minor=0; patch=0 ;;
+            minor) minor=$((minor + 1)); patch=0 ;;
+            patch) patch=$((patch + 1)) ;;
+          esac
+          next="v$major.$minor.$patch"
+          sha=$(git rev-parse HEAD)
+          if [ -n "$latest" ] && [ "$(git rev-list -n1 "$latest")" = "$sha" ]; then
+            echo "::error::main ($sha) is already released as $latest"; exit 1
+          fi
+          echo "latest=${latest:-none} next=$next sha=$sha"
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      # A release is a commit main's own CI already passed on every platform; nothing new is built here.
+      - name: Require green CI on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.version.outputs.sha }}
+        run: |
+          runs=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs?per_page=100" \
+            --jq '[.check_runs[] | select(.name | test("^(check|install) \\("))]')
+          total=$(jq length <<< "$runs")
+          green=$(jq '[.[] | select(.conclusion == "success")] | length' <<< "$runs")
+          jq -r '.[] | "\(.name): \(.status) \(.conclusion)"' <<< "$runs"
+          if [ "$total" -lt 6 ] || [ "$green" -ne "$total" ]; then
+            echo "::error::CI on $SHA is not green on every platform ($green of $total passed; 6 expected). Wait for it, or fix main."
+            exit 1
+          fi
+      - name: Tag and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEXT: ${{ steps.version.outputs.next }}
+          SHA: ${{ steps.version.outputs.sha }}
+        run: gh release create "$NEXT" --target "$SHA" --title "$NEXT" --generate-notes
