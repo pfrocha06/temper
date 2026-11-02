@@ -309,6 +309,7 @@ Install tools machine-wide, or list per-user tool folders in `TEMPER_GATE_ALLOW_
 | `TEMPER_CLAUDE_BIN` | `claude` | Path to the Claude Code CLI |
 | `TEMPER_CODEX_BIN` | `codex` | Path to the Codex CLI |
 | `TEMPER_CODEX_HOME` | `$TEMPER_HOME/secrets/codex` | Temper's own Codex login, kept apart from `~/.codex` |
+| `TEMPER_AGENT_ENV` | | Extra server variables agent CLIs may see, comma-separated (e.g. a Bedrock setup's). Agents otherwise get only a fixed allowlist |
 | `TEMPER_GITLEAKS` | `gitleaks` | Path to gitleaks (8.18 or later); required to push changes |
 | `TEMPER_HOLDOUTS_ROOT` | `$TEMPER_HOME/holdouts` (Windows: `%ProgramData%\temper\holdouts`) | Where new projects' holdouts are created |
 | `TEMPER_SETUP_ALLOW_DOMAINS` | public npm/yarn registries, GitHub, Playwright's CDN | Hosts setup commands may reach, comma-separated (add a private registry here). Setup runs in the sandbox, writing only its folder and the package caches (Windows: `%ProgramData%\temper\cache`) |

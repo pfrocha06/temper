@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { delimiter, join } from "node:path";
 import { createInterface } from "node:readline";
 import type { AgentAdapter, McpServerSpec, ModelUsage, RunEvent, RunRequest, RunResult } from "@temper/core";
+import { agentEnv } from "@temper/core/agent-env";
 
 export type CodexCliOptions = {
   /** The `codex` binary. On Windows an npm `codex.cmd` shim is resolved to its `codex.js`. */
@@ -18,6 +19,8 @@ export type CodexCliOptions = {
   codexHome: string;
   /** Directories no run may ever read (Temper's own secrets and database), on top of each request's. */
   alwaysDenyDirs?: string[];
+  /** Server variables to pass on top of the allowlist (TEMPER_AGENT_ENV). The login is in CODEX_HOME. */
+  passEnv?: string[];
   /** Where user-level skills live (`~/.agents/skills`); each is disabled for agent runs. */
   userSkillsDir?: string;
 };
@@ -281,7 +284,7 @@ export function createCodexCliAdapter(options: CodexCliOptions): AgentAdapter {
       return new Promise<RunResult>((resolve, reject) => {
         const child = spawn(resolved.file, [...resolved.args, ...args], {
           cwd: req.cwd,
-          env: { ...process.env, ...req.env, ...mcp.env, CODEX_HOME: options.codexHome },
+          env: agentEnv(options.passEnv ?? [], { ...req.env, ...mcp.env, CODEX_HOME: options.codexHome }),
           stdio: ["pipe", "pipe", "pipe"],
           signal: req.signal,
         });

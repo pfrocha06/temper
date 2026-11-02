@@ -33,6 +33,8 @@ export type Config = {
   gateSandbox: SandboxMode;
   /** The gitleaks command the secret scan runs (TEMPER_GITLEAKS, a path; default `gitleaks` on PATH). */
   gitleaks: string[];
+  /** Server variables agent CLIs get on top of their allowlist (TEMPER_AGENT_ENV, comma-separated names). */
+  agentEnv: string[];
   /** Extra paths gate commands may read (Windows: per-user tool installs the sandbox account cannot see). */
   gateAllowRead: string[];
 };
@@ -62,6 +64,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     holdoutsRoot: env.TEMPER_HOLDOUTS_ROOT ?? (process.platform === "win32" ? join(windowsGateRoot(), "holdouts") : join(home, "holdouts")),
     gateSandbox: env.TEMPER_GATE_SANDBOX === "off" ? "off" : "srt",
     gitleaks: [env.TEMPER_GITLEAKS || "gitleaks"],
+    agentEnv: (env.TEMPER_AGENT_ENV ?? "").split(",").map((s) => s.trim()).filter(Boolean),
     gateAllowRead: (env.TEMPER_GATE_ALLOW_READ ?? "").split(delimiter).filter(Boolean),
   };
 }

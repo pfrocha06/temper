@@ -16,3 +16,4 @@ export * from "./environments.ts";
 export * from "./knowledge.ts";
 export * from "./chats.ts";
 export * from "./usage.ts";
+export * from "./agent-env.ts";
