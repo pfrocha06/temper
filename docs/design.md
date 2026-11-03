@@ -1,7 +1,7 @@
 # Temper — design
 
 Temper is a local, always-on autonomous software factory with its own web UI.
-Agents build and maintain software; the human sets direction and grants autonomy.
+Agents build and maintain software; the human sets direction and approves every merge and deploy today. Granting autonomy is planned (see below).
 Its first product is itself.
 
 It blends three bodies of practice:
@@ -13,32 +13,35 @@ It blends three bodies of practice:
 - **Paperclip** — agents as an organisation: roles, tickets, heartbeats, budgets, the human
   as the board, an append-only audit log.
 
-## The differentiator: trust is measured
+## The differentiator: trust is measured (partly planned)
 
-Most harnesses trust an agent's self-report. Temper does not.
+Most harnesses trust an agent's self-report. Temper does not. Separation of powers is implemented;
+points 2 and 3 are the design intent and are future work (roadmap issues
+[#7](https://github.com/pfrocha06/temper/issues/7), [#8](https://github.com/pfrocha06/temper/issues/8) and
+[#10](https://github.com/pfrocha06/temper/issues/10)).
 
 1. **Separation of powers.** The agent that builds never owns the proof. A Verifier writes
    *holdout* behaviour tests from the spec into a separate repository the Builder cannot read.
    Builders receive only failing acceptance-criterion IDs, never test source.
-2. **Testing the testers.** Planted defects (mutations, reverted tickets, replayed escapes) are
-   periodically sent through every verifier. Each verifier earns a measured catch rate per
-   area of the codebase.
-3. **Temperature.** A single health signal computed from the audit log (reverts, flaky
-   verifications, escaped bugs, holdout failures, review disagreement). It tightens or relaxes
+2. **Testing the testers (planned).** Planted defects (mutations, reverted tickets, replayed escapes) would
+   be periodically sent through every verifier, and each verifier would earn a measured catch rate per
+   area of the codebase. Planned in roadmap #8.
+3. **Temperature (shadow mode).** Today it is computed and logged but not enforced. A single health signal computed from the audit log (reverts, flaky
+   verifications, escaped bugs, holdout failures, review disagreement). Once enforcement is built (planned), it would tighten or relax
    the regime automatically: heats fast, cools only on evidence, never on elapsed time.
 
-Autonomy is granted **per area** from measured catch rates, approved by the human, and is
-lost automatically when the temperature rises.
+Future work: autonomy would be granted **per area** from measured catch rates, approved by the human, and
+lost automatically when the temperature rises (planned, roadmap #10).
 
 ## Human role (the board)
 
-The human owns:
+The human owns the following today; the autonomy items are planned future work:
 
 - specs (via grilling),
-- autonomy promotions,
+- autonomy promotions (planned: none exist yet),
 - changes to holdouts, the Verifier agent, skills and workflows that touch verification,
-- deploys (until an area earns auto-deploy),
-- random spot-check PRs, sampled at a rate that rises with temperature.
+- deploys (a future auto-deploy, once an area earns it, is planned),
+- random spot-check PRs, sampled at a rate that would rise with temperature (planned).
 
 Everything else runs without the human.
 
@@ -100,7 +103,7 @@ Tickets declare a **file scope**; overlapping scopes are flagged before dispatch
 
 ## Definition of done
 
-At autonomy levels 0–1 (all areas start at 0), merge requires:
+Autonomy levels are planned (roadmap #10); today every area behaves as level 0, and merge requires:
 
 - Builder tests green, with the red→green test hashes recorded,
 - holdouts green against the running app,
@@ -158,9 +161,9 @@ skills/                 skill registry
 On Temper's own repo: a spec is imported → the Chief of Staff writes tickets → the Builder TDDs one
 in a worktree → the Verifier writes holdouts and runs them against the running app → the
 Reviewer reviews → the server opens a PR with evidence → the human merges → the human deploys
-with auto-rollback. Temperature is computed and logged but not enforced.
+with auto-rollback. Temperature is computed and logged in shadow mode, not enforced.
 
-The first self-built epic after v0: planted-defect trials, so the temperature has ground truth.
+The first self-built epic after v0 (planned, roadmap #7 and #8): planted-defect trials, so the temperature has ground truth.
 
 ## Known risks
 

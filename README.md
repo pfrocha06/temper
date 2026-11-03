@@ -4,10 +4,10 @@
 
 # Temper
 
-**A local, always-on software factory where trust in AI agents is measured, not assumed.**
+**A local, always-on software factory where the agent that builds never owns the proof.**
 
 Agents plan, build, verify and review changes to your repositories.
-You set direction, approve merges, and hand over autonomy only as it is earned.
+You set direction and approve every merge. Measured trust, with autonomy promotion earned per area, is planned ([roadmap #10](https://github.com/pfrocha06/temper/issues/10)).
 
 [![CI](https://github.com/pfrocha06/temper/actions/workflows/ci.yml/badge.svg)](https://github.com/pfrocha06/temper/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -40,8 +40,10 @@ opposite assumption, and enforces it in the server rather than in prompts.
   gates pass.
 - **The Builder's own code runs sandboxed too.** When the server runs the Builder's tests or
   boots its app, those processes can't read holdouts or Temper's secrets either.
-- **Health is a number.** A *temperature* computed from the audit log (reverts, escaped bugs,
-  holdout failures, review disagreement) heats fast and cools only on evidence.
+- **Health is a number, in shadow mode.** A *temperature* computed from the audit log (reverts,
+  escaped bugs, holdout failures, review disagreement) heats fast and cools only on evidence. It is
+  computed and logged but not enforced yet: it observes and does not gate work. Enforcement is
+  planned ([roadmap #10](https://github.com/pfrocha06/temper/issues/10)).
 
 ## Features
 
@@ -338,9 +340,10 @@ embedded in-process) with [Drizzle](https://orm.drizzle.team), React, Vite, Tail
 ## Roadmap
 
 Next up: a harness fingerprint on every run, merge readiness (wait for CI, previews, screenshots),
-notifications and a daily briefing, then **planted-defect trials** that give each verifier a
-measured catch rate, and **autonomy levels** that are earned per area from those rates and lost
-when the temperature rises. Progress lives in the pinned [Roadmap issue](https://github.com/pfrocha06/temper/issues/24),
+notifications and a daily briefing, then, all still planned, **planted-defect trials** ([#7](https://github.com/pfrocha06/temper/issues/7),
+[#8](https://github.com/pfrocha06/temper/issues/8)) that would give each verifier a measured catch rate,
+and **autonomy levels** ([#10](https://github.com/pfrocha06/temper/issues/10)) earned per area from those
+rates and lost when the temperature rises. Progress lives in the pinned [Roadmap issue](https://github.com/pfrocha06/temper/issues/24),
 one issue per item, each linking a spec written to be picked up cold ([docs/roadmap.md](docs/roadmap.md)).
 
 ## Documentation

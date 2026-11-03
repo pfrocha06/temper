@@ -147,3 +147,47 @@ describe("docs agree with the roles in code", () => {
     expect([...roleRows(sample)].sort()).not.toEqual([...ROLES].sort());
   });
 });
+
+/** Sentences of a markdown file: blocks end at blank lines, headings, bullets and table rows. */
+function sentences(md: string): string[] {
+  const blocks: string[] = [];
+  let cur = "";
+  const flush = () => { if (cur.trim()) blocks.push(cur.trim()); cur = ""; };
+  let fenced = false;
+  for (const line of md.split(/\r?\n/)) {
+    if (/^\s*```/.test(line)) { flush(); fenced = !fenced; continue; }
+    if (fenced) continue;
+    if (!line.trim() || /^(#|\||\s*[-*] |\s*\d+\. )/.test(line)) flush();
+    cur += ` ${line.replace(/^\s*([-*]|\d+\.) /, "")}`;
+  }
+  flush();
+  return blocks.flatMap((b) => b.split(/(?<=[.!?])\s+(?=[A-Z*])/));
+}
+
+const trialTopic = /\btrials?\b|catch rates?|autonomy (?:promotion|level|is |would |granted|earned)|autonomy promotions?|earns? a measured|auto-deploy/i;
+const plannedMarker = /\b(?:planned|roadmap|future|not enforced|not built|none exist|later)\b|issues\/\d+/i;
+
+/** Sentences about trials, catch rates or autonomy promotion that carry no planned marker. */
+function unmarkedClaims(md: string): string[] {
+  return sentences(md).filter((s) => trialTopic.test(s) && !plannedMarker.test(s));
+}
+
+describe("docs mark unbuilt trust features as planned", () => {
+  it("labels every trial, catch-rate and autonomy-promotion sentence in README and design", () => {
+    for (const { file, text } of docs.filter((d) => d.file !== "docs/roadmap.md")) {
+      expect(unmarkedClaims(text), file).toEqual([]);
+    }
+  });
+
+  it("says temperature runs in shadow mode in README and design", () => {
+    for (const { file, text } of docs.filter((d) => d.file !== "docs/roadmap.md")) {
+      expect(text, file).toMatch(/computed and logged[^.]*(?:shadow mode|not enforced)/i);
+      expect(text, file).toMatch(/not enforced/i);
+    }
+  });
+
+  it("reports a sentence that claims catch rates with no planned marker", () => {
+    const sample = "Each verifier earns a measured catch rate per area.\n\nAutonomy promotion is planned (roadmap #10).";
+    expect(unmarkedClaims(sample)).toEqual(["Each verifier earns a measured catch rate per area."]);
+  });
+});
