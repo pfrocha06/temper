@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { ROLES } from "@temper/core";
 import { describe, expect, it } from "vitest";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -106,5 +107,43 @@ describe("README matches the CLI", () => {
     expect(helpText).toMatch(/start \| stop\s+install\/uninstall the service \(launchd or systemd\)/);
     expect(readme).toMatch(/Background service \(`temper start`\) \| ✅ launchd \| ✅ systemd/);
     expect(readme).toMatch(/temper deploy .*macOS \(launchd\) and Linux with systemd; on Windows run `temper serve`/);
+  });
+});
+
+const docs = ["README.md", "docs/design.md", "docs/roadmap.md"].map((f) => ({ file: f, text: readFileSync(join(root, f), "utf8") }));
+
+/** Role ids named by the first column of the `| Role | Does | Never |` table: "Chief of Staff" is `chief`. */
+function roleRows(md: string): string[] {
+  const rows: string[] = [];
+  let inTable = false;
+  for (const line of md.split(/\r?\n/)) {
+    if (/^\|\s*Role\s*\|\s*Does\s*\|/.test(line)) { inTable = true; continue; }
+    if (!inTable) continue;
+    if (!line.startsWith("|")) break;
+    const cell = line.split("|")[1]!.trim();
+    if (/^-+$/.test(cell)) continue;
+    rows.push(cell.split(/\s+/)[0]!.toLowerCase());
+  }
+  return rows;
+}
+
+/** Wording that miscounts the roles or names the retired Planner role. */
+function roleClaims(text: string): string[] {
+  return [...text.matchAll(/four isolated (?:agent )?roles|\bplanner\b/gi)].map((m) => m[0]);
+}
+
+describe("docs agree with the roles in code", () => {
+  it("has one README role row per entry in ROLES", () => {
+    expect([...roleRows(readme)].sort()).toEqual([...ROLES].sort());
+  });
+
+  it("never claims four isolated roles or a Planner", () => {
+    for (const { file, text } of docs) expect(roleClaims(text), file).toEqual([]);
+  });
+
+  it("reports sample text that claims four roles plus a Chief of Staff", () => {
+    const sample = "- **Four isolated roles plus a Chief of Staff.** Fresh sessions.\n\n| Role | Does | Never |\n|---|---|---|\n| Planner | splits | codes |\n";
+    expect(roleClaims(sample)).toEqual(["Four isolated roles", "Planner"]);
+    expect([...roleRows(sample)].sort()).not.toEqual([...ROLES].sort());
   });
 });

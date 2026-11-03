@@ -51,11 +51,11 @@ repository.
 
 ## Agents
 
-v0 roles, all on the `claude` CLI behind a swappable adapter interface:
+v0 roles, on the `claude` CLI or the Codex CLI behind a swappable adapter interface:
 
 | Role | Does | Never |
 |---|---|---|
-| Planner | grills, writes spec, splits tickets | writes code |
+| Chief of Staff | turns specs into tickets, curates shared knowledge, answers the human | resolves board decisions itself |
 | Builder | TDD in a worktree, commits locally | reads holdouts, edits tests outside its ticket, pushes |
 | Verifier | owns holdouts + the verification skill, runs them against the running app | edits product code |
 | Reviewer | adversarial review of the diff against the spec | edits code |
@@ -155,7 +155,7 @@ skills/                 skill registry
 
 ## v0 is done when
 
-On Temper's own repo: a spec is imported → the Planner writes tickets → the Builder TDDs one
+On Temper's own repo: a spec is imported → the Chief of Staff writes tickets → the Builder TDDs one
 in a worktree → the Verifier writes holdouts and runs them against the running app → the
 Reviewer reviews → the server opens a PR with evidence → the human merges → the human deploys
 with auto-rollback. Temperature is computed and logged but not enforced.
