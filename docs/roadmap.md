@@ -3,8 +3,11 @@
 ## North star
 
 A harness whose agents improve themselves over time, so the board can trust them with more and
-more work without approving each step: autonomy is earned per area from measured evidence
-(catch rates, clean merges) and lost automatically when trust drops. Later the factory also runs
+more work without approving each step. This is the planned direction, not what ships today:
+temperature runs in shadow mode (computed and logged, not enforced), and planted-defect trials,
+catch rates, autonomy promotion and auto-deploy are future work ([#7](https://github.com/pfrocha06/temper/issues/7),
+[#8](https://github.com/pfrocha06/temper/issues/8), [#10](https://github.com/pfrocha06/temper/issues/10)). The plan: autonomy
+is earned per area from measured evidence (catch rates, clean merges) and lost automatically when trust drops. Later the factory also runs
 **automations and scheduled tasks**, and reads **many data sources** (issue trackers, wikis,
 meeting notes from an AI notetaker, chat) through connectors — so work can start from where
 decisions are actually made, not only from specs typed into Temper.
